@@ -1,1 +1,6 @@
-{"key.susinstantswap.swap": "Open Inventory", "key.categories.susinstantswap": "Su's Instant Swap", "susinstantswap.description": "One keypress to grab what you want!"}
+{
+  "key.susinstantswap.swap": "Open Inventory",
+  "key.categories.susinstantswap": "Su's Instant Swap",
+  "susinstantswap.description": "One keypress to grab what you want!",
+  "susinstantswap.config.preferred_handler": "Preferred Backpack Handler"
+}

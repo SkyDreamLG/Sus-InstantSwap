@@ -16,6 +16,8 @@ import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * SusInstantSwap 客户端核心类。
@@ -48,9 +50,8 @@ public class InstantSwapClient {
     private static boolean openedByUs;
     /** 当前接管交换流程的 handler */
     private static InstantSwapHandler activeHandler;
-    /** 缓存的优先 handler（null = 无配置或回退到自动），用于减少日志重复 */
-    private static InstantSwapHandler cachedPreferredHandler;
-    private static boolean preferredHandlerResolved;
+    /** 上次使用的优先 handler 名称，用于检测配置变更并减少重复日志 */
+    private static String lastPreferredHandlerName;
 
     public static void init() {
         LOGGER.info("[SusInstantSwap] 初始化客户端交换逻辑...");
@@ -64,33 +65,42 @@ public class InstantSwapClient {
         for (InstantSwapHandler handler : handlers) {
             LOGGER.info("[SusInstantSwap]   - {}", handler.getName());
         }
-        LOGGER.info("[SusInstantSwap] 优先处理器配置将在首次按键时解析（确保配置文件已加载）");
-        LOGGER.info("[SusInstantSwap] 如需指定优先处理器，请在配置文件中设置 preferredHandler 为上述名称之一");
+        LOGGER.info("[SusInstantSwap] 每次按键时实时读取配置文件，修改后在游戏内即刻生效");
+        LOGGER.info("[SusInstantSwap] 可在 Mods 配置界面中修改 preferredHandler，或直接编辑配置文件");
+        List<String> handlerNames = handlers.stream()
+                .map(InstantSwapHandler::getName)
+                .collect(Collectors.toList());
+        LOGGER.info("[SusInstantSwap] 可选值: " + String.join(", ", handlerNames));
     }
 
     /**
-     * 解析并缓存优先 handler。
-     * 在首次按键时调用（此时配置文件已加载完成）。
-     * 之后按键事件直接使用缓存结果。
+     * 根据当前配置解析优先 handler。
+     * 每次调用都会重新读取配置文件，确保游戏内修改即刻生效。
+     *
+     * @return 优先 handler，如果没有配置或配置的名称无效则返回 null
      */
-    private static void resolvePreferredHandler() {
-        if (preferredHandlerResolved) return;
-        preferredHandlerResolved = true;
-        LOGGER.info("[SusInstantSwap] 开始解析优先处理器配置...");
-
+    private static InstantSwapHandler resolvePreferredHandler() {
         String preferredName = InstantSwapConfig.getPreferredHandlerName();
-        if (preferredName == null) {
-            LOGGER.info("[SusInstantSwap] 未配置优先处理器，将按注册顺序自动选择");
-            cachedPreferredHandler = null;
-            return;
+
+        // 只在配置变更时输出日志
+        if (!Objects.equals(preferredName, lastPreferredHandlerName)) {
+            lastPreferredHandlerName = preferredName;
+            if (preferredName == null) {
+                LOGGER.info("[SusInstantSwap] 未配置优先处理器，将按注册顺序自动选择");
+            } else {
+                LOGGER.info("[SusInstantSwap] 优先处理器配置已改为: '{}'", preferredName);
+            }
         }
 
-        cachedPreferredHandler = HandlerRegistry.findByName(preferredName);
-        if (cachedPreferredHandler == null) {
-            LOGGER.warn("[SusInstantSwap] 配置了优先处理器 '{}'，但该处理器未注册，将回退到默认行为", preferredName);
-        } else {
-            LOGGER.info("[SusInstantSwap] 已设置优先处理器: '{}'", preferredName);
+        if (preferredName == null) {
+            return null;
         }
+
+        InstantSwapHandler handler = HandlerRegistry.findByName(preferredName);
+        if (handler == null) {
+            LOGGER.warn("[SusInstantSwap] 配置了优先处理器 '{}'，但该处理器未注册，将回退到默认行为", preferredName);
+        }
+        return handler;
     }
 
     public static void registerKey(RegisterKeyMappingsEvent event) {
@@ -116,21 +126,18 @@ public class InstantSwapClient {
 
         boolean down = isKeyPhysicallyDown(mc);
 
-        // 首次按键时解析优先处理器配置（此时配置文件已加载）
-        if (down && !preferredHandlerResolved) {
-            resolvePreferredHandler();
-        }
-
         // 按键按下：尝试寻找一个 handler 来接管
         if (down && !openedByUs && mc.screen == null) {
+            // 实时读取配置，确保游戏内修改即刻生效
+            InstantSwapHandler preferred = resolvePreferredHandler();
             Screen screen = null;
 
             // 1. 优先尝试配置的 handler
-            if (cachedPreferredHandler != null) {
-                screen = cachedPreferredHandler.onKeyDown(mc);
+            if (preferred != null) {
+                screen = preferred.onKeyDown(mc);
                 if (screen != null) {
-                    LOGGER.info("[SusInstantSwap] 优先处理器 '{}' 接管交换流程", cachedPreferredHandler.getName());
-                    activeHandler = cachedPreferredHandler;
+                    LOGGER.info("[SusInstantSwap] 优先处理器 '{}' 接管交换流程", preferred.getName());
+                    activeHandler = preferred;
                 }
             }
 
@@ -138,7 +145,7 @@ public class InstantSwapClient {
             if (screen == null) {
                 for (InstantSwapHandler handler : HandlerRegistry.getHandlers()) {
                     // 跳过已经尝试过的优先 handler
-                    if (handler == cachedPreferredHandler) continue;
+                    if (handler == preferred) continue;
                     screen = handler.onKeyDown(mc);
                     if (screen != null) {
                         LOGGER.info("[SusInstantSwap] Handler '{}' 接管交换流程", handler.getName());

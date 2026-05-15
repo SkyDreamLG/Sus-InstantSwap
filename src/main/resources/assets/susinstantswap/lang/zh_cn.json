@@ -1,1 +1,6 @@
-{"key.susinstantswap.swap": "打开物品栏", "key.categories.susinstantswap": "探囊取物", "susinstantswap.description": "一键把包里的东西拿到手上！"}
+{
+  "key.susinstantswap.swap": "打开物品栏",
+  "key.categories.susinstantswap": "探囊取物",
+  "susinstantswap.description": "一键把包里的东西拿到手上！",
+  "susinstantswap.config.preferred_handler": "首选背包处理器"
+}
