@@ -4,7 +4,9 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.logging.LogUtils;
 import com.susinstantswap.api.HandlerRegistry;
 import com.susinstantswap.api.InstantSwapHandler;
+import com.susinstantswap.api.SwapSlotInfo;
 import com.susinstantswap.config.InstantSwapConfig;
+import com.susinstantswap.integration.VanillaInventorySwapHandler;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -168,12 +170,49 @@ public class InstantSwapClient {
         // 按键释放：交由之前接管的 handler 执行交换
         if (!down && openedByUs) {
             if (activeHandler != null && mc.screen != null) {
+                boolean success = false;
                 LOGGER.info("[SusInstantSwap] 按键释放，Handler '{}' 执行交换", activeHandler.getName());
                 try {
-                    activeHandler.onKeyUp(mc, mc.screen);
+                    success = activeHandler.onKeyUp(mc, mc.screen);
                 } catch (Exception e) {
                     LOGGER.error("[SusInstantSwap] Handler '{}' 执行交换时发生异常", activeHandler.getName(), e);
                 }
+
+                // 如果第三方 handler 交换失败，尝试用原版逻辑重试
+                if (!success && !(activeHandler instanceof VanillaInventorySwapHandler)) {
+                    LOGGER.info("[SusInstantSwap] Handler '{}' 交换失败，尝试用原版逻辑重试", activeHandler.getName());
+
+                    // 询问 handler 是否提供修正后的槽位信息
+                    SwapSlotInfo fallbackSlots = activeHandler.getFallbackSwapSlots(mc, mc.screen);
+                    if (fallbackSlots != null) {
+                        LOGGER.info("[SusInstantSwap] 使用 handler 提供的修正槽位: menuSlot={}, hotbar={}",
+                                fallbackSlots.menuSlotIndex(), fallbackSlots.hotbarSlotIndex());
+                        try {
+                            boolean vanillaSuccess = VanillaInventorySwapHandler.performFallbackSwap(
+                                    mc, mc.screen, fallbackSlots);
+                            if (vanillaSuccess) {
+                                LOGGER.info("[SusInstantSwap] 原版 fallback 交换成功 (使用修正槽位)");
+                            } else {
+                                LOGGER.warn("[SusInstantSwap] 原版 fallback 交换也失败了");
+                            }
+                        } catch (Exception e) {
+                            LOGGER.error("[SusInstantSwap] 原版 fallback 交换时发生异常", e);
+                        }
+                    } else {
+                        VanillaInventorySwapHandler vanillaHandler = new VanillaInventorySwapHandler();
+                        try {
+                            boolean vanillaSuccess = vanillaHandler.onKeyUp(mc, mc.screen);
+                            if (vanillaSuccess) {
+                                LOGGER.info("[SusInstantSwap] 原版 fallback 交换成功");
+                            } else {
+                                LOGGER.warn("[SusInstantSwap] 原版 fallback 交换也失败了");
+                            }
+                        } catch (Exception e) {
+                            LOGGER.error("[SusInstantSwap] 原版 fallback 交换时发生异常", e);
+                        }
+                    }
+                }
+
                 mc.player.closeContainer();
             }
             openedByUs = false;

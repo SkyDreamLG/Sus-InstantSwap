@@ -21,6 +21,9 @@ import net.minecraft.client.gui.screens.Screen;
  *   <li>遍历所有已注册的 handler，调用 {@link #onKeyDown(Minecraft)}。
  *       第一个返回非 null Screen 的 handler 将"接管"本次交换流程。</li>
  *   <li>按键释放时，调用该 handler 的 {@link #onKeyUp(Minecraft, Screen)} 执行实际的交换逻辑。</li>
+ *   <li>如果 onKeyUp 返回 false，系统会尝试 fallback 到原版交换逻辑。
+ *       此时调用 {@link #getFallbackSwapSlots(Minecraft, Screen)}，若返回非 null，
+ *       则使用 handler 提供的修正槽位索引；否则由原版逻辑自行判断。</li>
  * </ol>
  */
 public interface InstantSwapHandler {
@@ -47,8 +50,25 @@ public interface InstantSwapHandler {
      *
      * @param mc     Minecraft 客户端实例
      * @param screen 当前打开的屏幕（由 onKeyDown 返回）
+     * @return true 表示交换成功完成，false 表示交换失败（此时系统可能 fallback 到原版逻辑）
      */
-    void onKeyUp(Minecraft mc, Screen screen);
+    boolean onKeyUp(Minecraft mc, Screen screen);
+
+    /**
+     * 当此 handler 的 {@link #onKeyUp} 返回 false，系统即将 fallback 到
+     * 原版交换逻辑时调用。handler 可返回修正后的槽位索引，
+     * 以适配某些模组对容器菜单槽位 ID 的特殊映射。
+     * <p>
+     * 返回 null 表示 handler 不提供修正，由原版逻辑自行判断槽位。
+     * </p>
+     *
+     * @param mc     Minecraft 客户端实例
+     * @param screen 当前打开的屏幕（由 onKeyDown 返回）
+     * @return 修正后的槽位信息，或 null 表示不需要修正
+     */
+    default SwapSlotInfo getFallbackSwapSlots(Minecraft mc, Screen screen) {
+        return null;
+    }
 
     /**
      * 返回此 handler 的显示名称，用于日志输出。
