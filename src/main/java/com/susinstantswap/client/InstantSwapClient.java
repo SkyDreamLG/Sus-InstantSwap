@@ -15,6 +15,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
+import java.util.List;
+
 /**
  * SusInstantSwap 客户端核心类。
  * <p>
@@ -57,8 +59,13 @@ public class InstantSwapClient {
                 "key.categories.susinstantswap");
         NeoForge.EVENT_BUS.register(InstantSwapClient.class);
         LOGGER.info("[SusInstantSwap] 已注册客户端事件到 NeoForge 总线");
-        LOGGER.info("[SusInstantSwap] 已发现 {} 个交换处理器", HandlerRegistry.getHandlers().size());
+        List<InstantSwapHandler> handlers = HandlerRegistry.getHandlers();
+        LOGGER.info("[SusInstantSwap] 已注册 {} 个交换处理器", handlers.size());
+        for (InstantSwapHandler handler : handlers) {
+            LOGGER.info("[SusInstantSwap]   - {}", handler.getName());
+        }
         LOGGER.info("[SusInstantSwap] 优先处理器配置将在首次按键时解析（确保配置文件已加载）");
+        LOGGER.info("[SusInstantSwap] 如需指定优先处理器，请在配置文件中设置 preferredHandler 为上述名称之一");
     }
 
     /**
