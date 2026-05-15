@@ -2,6 +2,7 @@ package com.susinstantswap;
 
 import com.mojang.logging.LogUtils;
 import com.susinstantswap.client.InstantSwapClient;
+import com.susinstantswap.api.HandlerRegistry;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -22,7 +23,10 @@ public class SusInstantSwapMod {
         LOGGER.info("[SusInstantSwap] 已注册模组主类到事件总线");
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
-            LOGGER.info("[SusInstantSwap] 当前环境为客户端，开始初始化客户端逻辑");
+            LOGGER.info("[SusInstantSwap] 当前环境为客户端，开始初始化");
+            // 1. 通过 ServiceLoader 自动扫描所有附属模组的 handler
+            HandlerRegistry.discover();
+            // 2. 初始化客户端按键监听
             InstantSwapClient.init();
         } else {
             LOGGER.warn("[SusInstantSwap] 非客户端环境，跳过客户端初始化");
