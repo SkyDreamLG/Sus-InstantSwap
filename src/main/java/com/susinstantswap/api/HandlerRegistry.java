@@ -1,6 +1,8 @@
 package com.susinstantswap.api;
 
 import com.mojang.logging.LogUtils;
+import com.susinstantswap.integration.VanillaInventorySwapHandler;
+import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -11,7 +13,7 @@ import java.util.ServiceLoader;
 /**
  * 瞬间交换处理器注册中心。
  * <p>
- * 维护所有已注册的 {@link InstantSwapHandler} 实例并提供遍历查询。
+ * 维护所有已注册的 {@link InstantSwapHandler} 实例。
  * 支持两种注册方式：
  * </p>
  * <ol>
@@ -23,10 +25,12 @@ import java.util.ServiceLoader;
  *       附属模组在其构造器中直接调用 {@link #register(InstantSwapHandler)}。</li>
  * </ol>
  * <p>
- * handler 的查询顺序即注册顺序。ServiceLoader 发现的 handler 会先被注册。
+ * <b>注意</b>：第三方 handler 可以注册任意数量，不再限制只允许一个。
+ * 系统通过 {@link InstantSwapHandler#isEquipped(Minecraft)} 判断使用哪一个。
  * </p>
  *
  * @see InstantSwapHandler
+ * @see VanillaInventorySwapHandler
  */
 public final class HandlerRegistry {
 
@@ -44,6 +48,8 @@ public final class HandlerRegistry {
      * 此方法应在模组主构造器中调用，确保所有模组（包括附属）都已加载。
      * 重复调用不会重复扫描。
      * </p>
+     *
+     * @throws IllegalStateException 如果发现超过一个第三方 handler
      */
     public static void discover() {
         if (discovered) {
@@ -65,6 +71,8 @@ public final class HandlerRegistry {
      * 注册一个 handler。
      * <p>
      * 重复注册同一个实例会被忽略。
+     * 允许注册任意数量的第三方 handler（不再限制只允许一个），
+     * 系统通过 {@link InstantSwapHandler#isEquipped(Minecraft)} 判断使用哪一个。
      * </p>
      *
      * @param handler 要注册的 handler
@@ -74,8 +82,10 @@ public final class HandlerRegistry {
             LOGGER.warn("[SusInstantSwap] Handler '{}' 已注册，跳过重复注册", handler.getName());
             return;
         }
+
         HANDLERS.add(handler);
-        LOGGER.info("[SusInstantSwap] 注册交换处理器: {}", handler.getName());
+        String type = handler instanceof VanillaInventorySwapHandler ? "原版" : "第三方";
+        LOGGER.info("[SusInstantSwap] 注册{}交换处理器: {}", type, handler.getName());
     }
 
     /**
@@ -96,6 +106,54 @@ public final class HandlerRegistry {
      */
     public static List<InstantSwapHandler> getHandlers() {
         return Collections.unmodifiableList(HANDLERS);
+    }
+
+    /**
+     * 获取所有第三方（非原版）handler 的列表。
+     *
+     * @return 第三方 handler 列表（可能为空）
+     */
+    public static List<InstantSwapHandler> getThirdPartyHandlers() {
+        List<InstantSwapHandler> result = new ArrayList<>();
+        for (InstantSwapHandler handler : HANDLERS) {
+            if (!(handler instanceof VanillaInventorySwapHandler)) {
+                result.add(handler);
+            }
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    /**
+     * 在有配置要求时，根据背包穿戴状态查找已装备的第三方 handler。
+     * <p>
+     * 遍历所有第三方 handler 调用 {@link InstantSwapHandler#isEquipped(Minecraft)}，
+     * 返回第一个返回 true 的 handler（同时只应有一个背包处于穿戴状态）。
+     * </p>
+     *
+     * @param mc Minecraft 客户端实例
+     * @return 装备中的第三方 handler，无装备时返回 null
+     */
+    public static InstantSwapHandler getEquippedThirdPartyHandler(Minecraft mc) {
+        for (InstantSwapHandler handler : HANDLERS) {
+            if (!(handler instanceof VanillaInventorySwapHandler) && handler.isEquipped(mc)) {
+                return handler;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 获取原版交换 handler 实例。
+     *
+     * @return VanillaInventorySwapHandler 实例，如果没有注册则返回 null
+     */
+    public static VanillaInventorySwapHandler getVanillaHandler() {
+        for (InstantSwapHandler handler : HANDLERS) {
+            if (handler instanceof VanillaInventorySwapHandler vh) {
+                return vh;
+            }
+        }
+        return null;
     }
 
     /**

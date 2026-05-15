@@ -3,12 +3,14 @@ package com.susinstantswap.integration;
 import com.mojang.logging.LogUtils;
 import com.susinstantswap.api.InstantSwapHandler;
 import com.susinstantswap.api.SwapSlotInfo;
+import com.susinstantswap.config.InstantSwapConfig;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -105,21 +107,20 @@ public class VanillaInventorySwapHandler implements InstantSwapHandler {
      * 和 findPlayerInventorySlot 的查找步骤。
      * </p>
      *
-     * @param mc      Minecraft 客户端实例
-     * @param screen  当前屏幕
-     * @param slots   handler 提供的修正槽位信息
-     * @return true 表示交换成功
+     * @param mc     Minecraft 客户端实例
+     * @param screen 当前屏幕
+     * @param slots  handler 提供的修正槽位信息
      */
-    public static boolean performFallbackSwap(Minecraft mc, Screen screen, SwapSlotInfo slots) {
-        if (mc.player == null || mc.getConnection() == null) return false;
+    public static void performFallbackSwap(Minecraft mc, Screen screen, SwapSlotInfo slots) {
+        if (mc.player == null || mc.getConnection() == null) return;
 
         // 校验悬停槽位必须存在且有物品（与原版 survival 逻辑保持一致）
         Slot hoveredSlot = mc.player.inventoryMenu.getSlot(slots.menuSlotIndex());
-        if (hoveredSlot == null || !hoveredSlot.hasItem()) {
+        if (!hoveredSlot.hasItem()) {
             LOGGER.warn("[SusInstantSwap/Vanilla] Fallback 交换失败: 槽位{}无物品 (屏幕: {})",
                     slots.menuSlotIndex(),
                     screen != null ? screen.getClass().getSimpleName() : "null");
-            return false;
+            return;
         }
 
         int containerId = mc.player.inventoryMenu.containerId;
@@ -133,7 +134,6 @@ public class VanillaInventorySwapHandler implements InstantSwapHandler {
         LOGGER.info("[SusInstantSwap/Vanilla] Fallback 交换完成: 槽位{} <-> 快捷栏{} (屏幕: {})",
                 slots.menuSlotIndex(), slots.hotbarSlotIndex(),
                 screen != null ? screen.getClass().getSimpleName() : "null");
-        return true;
     }
 
     // ==================== 生存模式交换 ====================
@@ -164,9 +164,53 @@ public class VanillaInventorySwapHandler implements InstantSwapHandler {
             return false;
         }
 
+        int selectedHotbar = 0;
+        if (mc.player != null) {
+            selectedHotbar = mc.player.getInventory().selected;
+        }
+
         if (!hoveredSlot.hasItem()) {
-            LOGGER.warn("[SusInstantSwap/Vanilla] 生存模式交换失败: 悬停槽位无物品");
-            return false;
+            // 悬停槽位为空 — 检查是否允许空交换
+            if (InstantSwapConfig.isAllowSwapWithEmptySlot()) {
+                // 允许：把主手物品放入目标空槽位
+                ItemStack heldItem = mc.player.getInventory().getItem(selectedHotbar);
+                if (heldItem.isEmpty()) {
+                    LOGGER.warn("[SusInstantSwap/Vanilla] 生存模式空交换失败: 主手也无物品");
+                    return false;
+                }
+                // 验证悬停槽位属于玩家物品栏且位于背包区域
+                if (hoveredSlot.container != mc.player.getInventory()) {
+                    LOGGER.warn("[SusInstantSwap/Vanilla] 生存模式空交换失败: 悬停槽位不属于玩家物品栏");
+                    return false;
+                }
+                int playerInvSlot = hoveredSlot.getContainerSlot();
+                if (playerInvSlot < 9 || playerInvSlot > 35) {
+                    LOGGER.warn("[SusInstantSwap/Vanilla] 生存模式空交换失败: 悬停槽位不在玩家背包区域 (playerInvSlot={})",
+                            playerInvSlot);
+                    return false;
+                }
+                Slot hotbarSlot = findPlayerInventorySlot(containerScreen, selectedHotbar);
+                if (hotbarSlot == null || hoveredSlot.index == hotbarSlot.index) {
+                    LOGGER.warn("[SusInstantSwap/Vanilla] 生存模式空交换失败: 快捷栏槽位位置异常");
+                    return false;
+                }
+                int containerId = mc.player.inventoryMenu.containerId;
+                int stateId = mc.player.inventoryMenu.getStateId();
+                Int2ObjectOpenHashMap<ItemStack> changedSlots = new Int2ObjectOpenHashMap<>();
+                ServerboundContainerClickPacket packet = new ServerboundContainerClickPacket(
+                        containerId, stateId, hoveredSlot.index, selectedHotbar,
+                        ClickType.SWAP, ItemStack.EMPTY, changedSlots);
+                Objects.requireNonNull(mc.getConnection()).send(packet);
+                mc.player.playNotifySound(SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.8f, 1.0f);
+                LOGGER.info("[SusInstantSwap/Vanilla] 生存模式空交换完成: 主手物品放入槽位{}", hoveredSlot.index);
+                return true;
+            } else {
+                // 不允许：发送消息提示玩家
+                LOGGER.warn("[SusInstantSwap/Vanilla] 生存模式交换失败: 悬停槽位无物品");
+                mc.player.displayClientMessage(
+                        Component.translatable("susinstantswap.message.empty_slot_blocked"), true);
+                return false;
+            }
         }
 
         // 验证悬停槽位属于玩家物品栏
@@ -183,7 +227,6 @@ public class VanillaInventorySwapHandler implements InstantSwapHandler {
             return false;
         }
 
-        int selectedHotbar = mc.player.getInventory().selected;
         // 在容器菜单中动态查找选中快捷栏槽位，不依赖硬编码索引
         Slot hotbarSlot = findPlayerInventorySlot(containerScreen, selectedHotbar);
         if (hotbarSlot == null) {
@@ -229,12 +272,19 @@ public class VanillaInventorySwapHandler implements InstantSwapHandler {
 
         Slot hoveredSlot = containerScreen.getSlotUnderMouse();
         if (hoveredSlot == null || !hoveredSlot.hasItem()) {
+            if (mc.player != null) {
+                mc.player.displayClientMessage(
+                        Component.translatable("susinstantswap.message.empty_slot_blocked"), true);
+            }
             LOGGER.warn("[SusInstantSwap/Vanilla] 创造模式交换失败: 悬停槽位无物品 (屏幕: {})",
                     screen.getClass().getSimpleName());
             return false;
         }
 
-        int selected = mc.player.getInventory().selected;
+        int selected = 0;
+        if (mc.player != null) {
+            selected = mc.player.getInventory().selected;
+        }
         int heldSlotIndex = selected + 36;
         boolean didSwap = false;
 
@@ -242,7 +292,9 @@ public class VanillaInventorySwapHandler implements InstantSwapHandler {
         if (screen instanceof CreativeModeInventoryScreen creativeScreen) {
             if (hoveredSlot.container == CreativeModeInventoryScreen.CONTAINER) {
                 ItemStack item = hoveredSlot.getItem().copyWithCount(1);
-                mc.gameMode.handleCreativeModeItemAdd(item, heldSlotIndex);
+                if (mc.gameMode != null) {
+                    mc.gameMode.handleCreativeModeItemAdd(item, heldSlotIndex);
+                }
                 didSwap = true;
                 LOGGER.info("[SusInstantSwap/Vanilla] 创造模式交换: 从创造物品栏拿取物品到快捷栏{}", selected);
 
@@ -255,8 +307,12 @@ public class VanillaInventorySwapHandler implements InstantSwapHandler {
                     if (targetMenuSlot != heldSlotIndex) {
                         ItemStack targetItem = wrapper.target.getItem().copy();
                         ItemStack heldItem = mc.player.inventoryMenu.getSlot(heldSlotIndex).getItem().copy();
-                        mc.gameMode.handleCreativeModeItemAdd(targetItem, heldSlotIndex);
-                        mc.gameMode.handleCreativeModeItemAdd(heldItem, targetMenuSlot);
+                        if (mc.gameMode != null) {
+                            mc.gameMode.handleCreativeModeItemAdd(targetItem, heldSlotIndex);
+                        }
+                        if (mc.gameMode != null) {
+                            mc.gameMode.handleCreativeModeItemAdd(heldItem, targetMenuSlot);
+                        }
                         didSwap = true;
                         LOGGER.info("[SusInstantSwap/Vanilla] 创造模式交换: 背包槽位{} (playerInv={}) <-> 快捷栏{}",
                                 targetMenuSlot, targetContainerSlot, selected);
@@ -269,8 +325,12 @@ public class VanillaInventorySwapHandler implements InstantSwapHandler {
                     if (hotbarMenuSlot != heldSlotIndex) {
                         ItemStack hotbarItem = mc.player.getInventory().getItem(containerSlot).copy();
                         ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
-                        mc.gameMode.handleCreativeModeItemAdd(hotbarItem, heldSlotIndex);
-                        mc.gameMode.handleCreativeModeItemAdd(heldItem, hotbarMenuSlot);
+                        if (mc.gameMode != null) {
+                            mc.gameMode.handleCreativeModeItemAdd(hotbarItem, heldSlotIndex);
+                        }
+                        if (mc.gameMode != null) {
+                            mc.gameMode.handleCreativeModeItemAdd(heldItem, hotbarMenuSlot);
+                        }
                         didSwap = true;
                         LOGGER.info("[SusInstantSwap/Vanilla] 创造模式交换: 快捷栏槽位{} <-> 快捷栏{}",
                                 containerSlot, selected);
@@ -280,25 +340,8 @@ public class VanillaInventorySwapHandler implements InstantSwapHandler {
         } else {
             // Fallback: 非创造模式物品栏屏幕，使用动态槽位定位执行 SWAP
             // 验证悬停槽位属于玩家物品栏
-            if (hoveredSlot.container != mc.player.getInventory()) {
+            if (mc.player != null && hoveredSlot.container != mc.player.getInventory()) {
                 LOGGER.warn("[SusInstantSwap/Vanilla] 创造模式 fallback 交换失败: 悬停槽位不属于玩家物品栏");
-            } else {
-                int playerInvSlot = hoveredSlot.getContainerSlot();
-                if (playerInvSlot >= 9 && playerInvSlot <= 35) {
-                    Slot hotbarSlot = findPlayerInventorySlot(containerScreen, selected);
-                    if (hotbarSlot != null && hoveredSlot.index != hotbarSlot.index) {
-                        int containerId = mc.player.inventoryMenu.containerId;
-                        int stateId = mc.player.inventoryMenu.getStateId();
-                        Int2ObjectOpenHashMap<ItemStack> changedSlots = new Int2ObjectOpenHashMap<>();
-                        ServerboundContainerClickPacket packet = new ServerboundContainerClickPacket(
-                                containerId, stateId, hoveredSlot.index, selected,
-                                ClickType.SWAP, ItemStack.EMPTY, changedSlots);
-                        Objects.requireNonNull(mc.getConnection()).send(packet);
-                        didSwap = true;
-                        LOGGER.info("[SusInstantSwap/Vanilla] 创造模式 fallback 交换: 槽位{} (playerInv={}) <-> 快捷栏{} (屏幕: {})",
-                                hoveredSlot.index, playerInvSlot, selected, screen.getClass().getSimpleName());
-                    }
-                }
             }
         }
 

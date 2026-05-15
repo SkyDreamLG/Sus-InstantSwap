@@ -16,14 +16,25 @@ import net.minecraft.client.gui.screens.Screen;
  * </p>
  *
  * <h3>生命周期</h3>
- * <p>当玩家按下交换按键（默认 Left Alt）时：</p>
+ * <p>系统允许注册任意数量的第三方 handler。
+ * 根据用户配置 {@code preferThirdParty} 和背包穿戴状态决定使用哪个 handler：</p>
  * <ol>
- *   <li>遍历所有已注册的 handler，调用 {@link #onKeyDown(Minecraft)}。
- *       第一个返回非 null Screen 的 handler 将"接管"本次交换流程。</li>
- *   <li>按键释放时，调用该 handler 的 {@link #onKeyUp(Minecraft, Screen)} 执行实际的交换逻辑。</li>
- *   <li>如果 onKeyUp 返回 false，系统会尝试 fallback 到原版交换逻辑。
- *       此时调用 {@link #getFallbackSwapSlots(Minecraft, Screen)}，若返回非 null，
- *       则使用 handler 提供的修正槽位索引；否则由原版逻辑自行判断。</li>
+ *   <li><b>按键按下时</b>：若当前无任何屏幕打开：
+ *       <ul>
+ *         <li>{@code preferThirdParty=true}：遍历所有第三方 handler 的
+ *             {@link #isEquipped(Minecraft)}，若某个返回 true 则使用该 handler
+ *             （同时只会有一个背包处于穿戴状态）；若无穿着则使用原版 handler</li>
+ *         <li>{@code preferThirdParty=false}：始终使用原版 handler</li>
+ *       </ul>
+ *       系统记录实际打开屏幕的 handler。</li>
+ *   <li><b>按键释放时</b>：由记录的 handler 执行
+ *       {@link #onKeyUp(Minecraft, Screen)}。若未记录任何 handler
+ *       （如屏幕被外部关闭后重新打开），回退到原版交换逻辑。</li>
+ *   <li>若 handler 的 onKeyUp 返回 false：
+ *       <ul>
+ *         <li>第三方 handler 失败 → 原版 fallback（优先用 {@link #getFallbackSwapSlots} 修正槽位）</li>
+ *         <li>原版 handler 失败 → 尝试第三方 handler（若有穿着）</li>
+ *       </ul></li>
  * </ol>
  */
 public interface InstantSwapHandler {
@@ -44,12 +55,13 @@ public interface InstantSwapHandler {
     /**
      * 当交换按键被释放时调用，执行物品交换逻辑。
      * <p>
-     * 传入的 screen 参数是按键按下时由 {@link #onKeyDown(Minecraft)} 打开的屏幕，
-     * 也就是当前正在显示的屏幕。handler 应基于此屏幕执行交换操作。
+     * 传入的 screen 参数是当前正在显示的屏幕，
+     * 即按键按下时由本 handler 的 {@link #onKeyDown} 返回的屏幕实例。
+     * handler 应基于此屏幕执行交换操作。
      * </p>
      *
      * @param mc     Minecraft 客户端实例
-     * @param screen 当前打开的屏幕（由 onKeyDown 返回）
+     * @param screen 当前打开的屏幕（由本 handler 打开）
      * @return true 表示交换成功完成，false 表示交换失败（此时系统可能 fallback 到原版逻辑）
      */
     boolean onKeyUp(Minecraft mc, Screen screen);
@@ -63,11 +75,29 @@ public interface InstantSwapHandler {
      * </p>
      *
      * @param mc     Minecraft 客户端实例
-     * @param screen 当前打开的屏幕（由 onKeyDown 返回）
+     * @param screen 当前打开的屏幕
      * @return 修正后的槽位信息，或 null 表示不需要修正
      */
     default SwapSlotInfo getFallbackSwapSlots(Minecraft mc, Screen screen) {
         return null;
+    }
+
+    /**
+     * 查询此 handler 对应的背包是否处于穿戴状态。
+     * <p>
+     * 当 {@code preferThirdParty=true} 时，系统会遍历所有第三方 handler
+     * 调用此方法。返回 true 的 handler 将被用于执行打开 GUI 和交换操作。
+     * 同时只应有一个 handler 返回 true（玩家同时只能穿戴一个背包）。
+     * </p>
+     * <p>
+     * 默认返回 false。原版 handler 不需要覆盖此方法。
+     * </p>
+     *
+     * @param mc Minecraft 客户端实例
+     * @return true 表示对应背包已穿戴
+     */
+    default boolean isEquipped(Minecraft mc) {
+        return false;
     }
 
     /**

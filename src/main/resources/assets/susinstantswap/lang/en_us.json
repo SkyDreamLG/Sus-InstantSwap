@@ -2,5 +2,8 @@
   "key.susinstantswap.swap": "Open Inventory",
   "key.categories.susinstantswap": "Su's Instant Swap",
   "susinstantswap.description": "One keypress to grab what you want!",
-  "susinstantswap.config.preferred_handler": "Preferred Backpack Handler"
+  "susinstantswap.config.prefer_third_party": "Prefer Third-Party Adapter",
+  "susinstantswap.config.allow_swap_with_empty_slot": "Allow Swap With Empty Slot In Survival Mode",
+  "susinstantswap.message.adapter_reminder": "§e[SusInstantSwap] Please install adapters for all installed backpack mods, otherwise you may encounter issues.",
+  "susinstantswap.message.empty_slot_blocked": "§c[SusInstantSwap] Cannot swap: the hovered slot is empty."
 }
