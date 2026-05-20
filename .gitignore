@@ -1,22 +1,23 @@
 # Gradle
-**/build/
-**/.gradle/
-**/run/
-**/logs/
+.gradle/
+build/
+bin/
 
 # IDE
 .idea/
 *.iml
 *.ipr
 *.iws
-.vscode/
-*.swp
-*.swo
-*~
+.project
+.classpath
+.settings/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Mod artifacts (keep only in releases/)
+# Compiled mod JAR (download from Releases page)
 *.jar
+
+# Logo variants (keep only Logo.png and Logo_512.png)
+Logo_Origin.png
