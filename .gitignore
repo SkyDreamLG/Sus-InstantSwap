@@ -1,22 +1,40 @@
-# Gradle
-**/build/
-**/.gradle/
-**/run/
-**/logs/
+# gradle
 
-# IDE
+.gradle/
+build/
+out/
+classes/
+
+# eclipse
+
+*.launch
+
+# idea
+
 .idea/
 *.iml
 *.ipr
 *.iws
+
+# vscode
+
+.settings/
 .vscode/
-*.swp
-*.swo
-*~
+bin/
+.classpath
+.project
 
-# OS
-.DS_Store
-Thumbs.db
+# macos
 
-# Mod artifacts (keep only in releases/)
-*.jar
+*.DS_Store
+
+# fabric
+
+run/
+
+# java
+
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
