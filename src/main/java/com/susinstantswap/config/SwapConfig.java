@@ -43,6 +43,7 @@ public class SwapConfig {
                 )
                 .define("longPressMode", true);
 
+
         holdThresholdMs = builder
                 .translation("config.susinstantswap.holdThresholdMs")
                 .comment(
@@ -54,6 +55,7 @@ public class SwapConfig {
 
         builder.pop();
 
+
         // ── Sound ──
         builder.push("sound");
 
@@ -64,6 +66,7 @@ public class SwapConfig {
 
         builder.pop();
 
+
         // ── Debug ──
         builder.push("debug");
 
@@ -73,6 +76,7 @@ public class SwapConfig {
                 .define("debug", false);
 
         builder.pop();
+
 
         // ── Mouse ──
         builder.push("mouse");
