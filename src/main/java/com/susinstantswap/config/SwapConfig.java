@@ -7,8 +7,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  *
  * Config file location: config/susinstantswap-client.toml
  * Compatible with Configured mod for in-game editing.
- * All comment text is in English for universal readability;
- * the in-game config screen uses Minecraft i18n keys.
+ * Changes take effect immediately — no restart needed.
  */
 public class SwapConfig {
 
@@ -17,80 +16,60 @@ public class SwapConfig {
     public final ModConfigSpec.BooleanValue soundEnabled;
     public final ModConfigSpec.BooleanValue debug;
     public final ModConfigSpec.BooleanValue mouseReposition;
-
     public SwapConfig(ModConfigSpec.Builder builder) {
-        builder.comment(
-                "Su's Instant Swap v1.1.0 Configuration",
+        builder.comment("探囊取物 (Su's Instant Swap) - 合并版配置",
                 "",
-                "Long/Short Press Mode:",
-                "  ON  (true):  short Alt press (< holdThresholdMs) toggles the vanilla inventory,",
-                "               long press activates instant swap",
-                "  OFF (false): hold Alt to open inventory, release to swap (v1.0.3 classic behavior)",
+                "长短按模式 (Long/Short Press Mode):",
+                "  ON (true):  短按 Alt (< holdThresholdMs) 切换原版物品栏，长按启用即时交换",
+                "  OFF (false): 按住 Alt 打开物品栏，松开执行交换（经典行为）",
                 "",
-                "Changes take effect immediately — no restart needed.",
-                "Compatible with Configured mod for in-game editing."
-        );
+                "修改后即时生效，无需重启游戏。",
+                "Compatible with Configured mod for in-game editing.");
 
-        // ── Long/Short Press ──
-        builder.push("long_short_press");
+        // All options at root level — no sub-sections.
 
+        // -----------------------------
+        //  Long/Short Press Mode
+        // -----------------------------
         longPressMode = builder
                 .translation("config.susinstantswap.longPressMode")
-                .comment(
-                        "Toggle long/short press mode.",
-                        "  true  = short press toggles inventory / long press swaps",
-                        "  false = classic mode (hold to open, release to swap)"
-                )
+                .comment("长短按模式开关 (Long/Short Press Mode)",
+                        "true = 短按切换物品栏/长按交换",
+                        "false = 经典模式（按住打开，松开交换）")
                 .define("longPressMode", true);
-
 
         holdThresholdMs = builder
                 .translation("config.susinstantswap.holdThresholdMs")
-                .comment(
-                        "Long press threshold in milliseconds.",
-                        "Press duration above this value is treated as a long press.",
-                        "Range: 50 – 1000 ms"
-                )
+                .comment("长按判定阈值 (Long Press Threshold)，单位：毫秒",
+                        "按下超过此时长视为长按，否则为短按",
+                        "范围 (Range): 50-1000ms")
                 .defineInRange("holdThresholdMs", 200, 50, 1000);
 
-        builder.pop();
-
-
-        // ── Sound ──
-        builder.push("sound");
-
+        // -----------------------------
+        //  Sound
+        // -----------------------------
         soundEnabled = builder
                 .translation("config.susinstantswap.soundEnabled")
-                .comment("Enable / disable the swap sound effect.")
+                .comment("", "交换音效 (Swap Sound)")
                 .define("soundEnabled", true);
 
-        builder.pop();
-
-
-        // ── Debug ──
-        builder.push("debug");
-
+        // -----------------------------
+        //  Debug
+        // -----------------------------
         debug = builder
                 .translation("config.susinstantswap.debug")
-                .comment("Enable / disable debug logging to the game log.")
+                .comment("", "调试日志 (Debug Logging)")
                 .define("debug", false);
 
-        builder.pop();
-
-
-        // ── Mouse ──
-        builder.push("mouse");
-
+        // -----------------------------
+        //  Mouse Reposition
+        // -----------------------------
         mouseReposition = builder
                 .translation("config.susinstantswap.mouseReposition")
-                .comment(
-                        "When opening the inventory, automatically move the mouse",
-                        "to the bottom-right corner of the UI.",
-                        "  true  = move mouse",
-                        "  false = keep original position"
-                )
+                .comment("", "鼠标重定位 (Mouse Reposition)",
+                        "打开物品栏时自动将鼠标移动到 UI 右下角",
+                        "true = 移动，false = 保持原位")
                 .define("mouseReposition", true);
 
-        builder.pop();
     }
 }
