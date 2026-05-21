@@ -14,15 +14,15 @@
   "config.susinstantswap.soundEnabled": "交换音效",
   "config.susinstantswap.soundEnabled.tooltip": "交换物品时播放音效。",
 
-  "config.susinstantswap.debug": "调试日志",
-  "config.susinstantswap.debug.tooltip": "输出调试信息到游戏日志。",
-
   "config.susinstantswap.mouseReposition": "鼠标重定位",
   "config.susinstantswap.mouseReposition.tooltip": "打开物品栏时自动将鼠标移动到界面右下角。",
+
+  "config.susinstantswap.debug": "调试日志",
+  "config.susinstantswap.debug.tooltip": "输出调试信息到游戏日志。",
 
   "susinstantswap.configuration.title": "探囊取物 - 配置界面",
   "susinstantswap.configuration.long_short_press": "按键设置",
   "susinstantswap.configuration.sound": "音效设置",
-  "susinstantswap.configuration.debug": "调试设置",
-  "susinstantswap.configuration.mouse": "鼠标设置"
+  "susinstantswap.configuration.mouse": "鼠标设置",
+  "susinstantswap.configuration.debug": "调试设置"
 }
