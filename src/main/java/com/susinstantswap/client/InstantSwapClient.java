@@ -298,8 +298,8 @@ public class InstantSwapClient {
         long handle = mc.getWindow().getWindow();
         double guiScale = mc.getWindow().getGuiScale();
 
-        int guiRight = containerScreen.leftPos + containerScreen.imageWidth;
-        int guiBottom = containerScreen.topPos + containerScreen.imageHeight;
+        int guiRight = containerScreen.getGuiLeft() + containerScreen.getXSize();
+        int guiBottom = containerScreen.getGuiTop() + containerScreen.getYSize();
         int pixelX = (int) (guiRight * guiScale) - 5;
         int pixelY = (int) (guiBottom * guiScale) - 5;
 

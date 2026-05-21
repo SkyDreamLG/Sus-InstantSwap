@@ -20,21 +20,22 @@ public class SusInstantSwapMod {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     public SusInstantSwapMod(IEventBus modEventBus, ModContainer modContainer) {
-        LOGGER.info("[SusInstantSwap] v1.1.0 模组构造器被调用 (开始加载)");
+        LOGGER.info("[SusInstantSwap] v1.1.0 — constructor called (loading started)");
         modEventBus.register(this);
 
-        // 构建 ModConfigSpec（兼容 Configured 模组在游戏内修改配置）
-        // ★ 注意：构造器中不能调用 config.get()，配置在 ModConfigEvent.Loading 后才可用
+        // Build ModConfigSpec (compatible with Configured mod for in-game editing).
+        // IMPORTANT: do not call config.get() in the constructor —
+        // config values are only available after ModConfigEvent.Loading.
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         SwapConfig config = new SwapConfig(builder);
         ModConfigSpec spec = builder.build();
         modContainer.registerConfig(ModConfig.Type.CLIENT, spec);
-        LOGGER.info("[SusInstantSwap] ModConfigSpec 已注册为 CLIENT 类型");
+        LOGGER.info("[SusInstantSwap] ModConfigSpec registered as CLIENT type");
 
         InstantSwapClient.init(config);
-        LOGGER.info("[SusInstantSwap] 客户端逻辑初始化完成");
+        LOGGER.info("[SusInstantSwap] Client logic initialized");
 
-        LOGGER.info("[SusInstantSwap] v1.1.0 模组加载完成");
+        LOGGER.info("[SusInstantSwap] v1.1.0 — mod loaded");
     }
 
     @SubscribeEvent
