@@ -1,0 +1,57 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+base {
+    archivesName = 'Sus_InstantSwap-1.1.0-Forge1.21'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+minecraft {
+    mappings channel: 'official', version: '1.21.1'
+
+    copyIdeResources = true
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            mods { susinstantswap { source sourceSets.main } }
+        }
+        client { property 'forge.enabledGameTestNamespaces', 'susinstantswap' }
+        server { property 'forge.enabledGameTestNamespaces', 'susinstantswap'; args '--nogui' }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            minecraft_version: minecraft_version, forge_version: forge_version,
+            mod_id: 'susinstantswap', mod_version: '1.1.0',
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/mods.toml']) { expand replaceProperties }
+}
+
+tasks.named('jar', Jar).configure {
+    archiveVersion = ''
+    manifest { attributes([
+        'Specification-Title': 'susinstantswap',
+        'Specification-Version': '1.1.0',
+        'Implementation-Title': "Su's Instant Swap",
+        'Implementation-Version': '1.1.0',
+    ])}
+}
+
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
