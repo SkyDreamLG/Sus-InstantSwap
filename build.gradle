@@ -52,6 +52,7 @@ tasks.named('jar', Jar).configure {
         'Implementation-Title': "Su's Instant Swap",
         'Implementation-Version': '1.1.0',
     ])}
+    finalizedBy 'reobfJar'
 }
 
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
