@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[64,)"
+license="LGPL-3.0"
+
+[[mods]]
+modId="susinstantswap"
+version="${mod_version}"
+displayName="Su's Instant Swap"
+logoFile="susinstantswap/icon.png"
+description='''
+Instant item swap between inventory and hotbar with a single key press (default: Left Alt).
+Supports long-press mode, survival and creative modes, and mouse repositioning.
+'''
+
+[[dependencies.susinstantswap]]
+    modId="forge"
+    mandatory=true
+    versionRange="[64,)"
+    ordering="NONE"
+    side="CLIENT"
+
+[[dependencies.susinstantswap]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[26.1,26.2)"
+    ordering="NONE"
+    side="CLIENT"

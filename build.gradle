@@ -1,0 +1,61 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'eclipse'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[7.0.17,8)'
+}
+
+base {
+    archivesName = 'Sus_InstantSwap-1.1.0-Forge26.1'
+}
+
+// Use JDK 25 (set via JAVA_HOME)
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+minecraft {
+    runs {
+        configureEach {
+            workingDir = layout.projectDirectory.dir('run')
+            systemProperty 'forge.enabledGameTestNamespaces', 'susinstantswap'
+        }
+        register('client')
+        register('server') { args '--nogui' }
+    }
+}
+
+repositories {
+    // China mirrors for faster/accessible downloads
+    maven { url = 'https://maven.aliyun.com/repository/public' }
+    maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    mavenCentral()
+}
+
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            minecraft_version: minecraft_version, forge_version: forge_version,
+            mod_id: 'susinstantswap', mod_version: '1.1.0',
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/mods.toml']) { expand replaceProperties }
+}
+
+tasks.named('jar', Jar).configure {
+    archiveVersion = ''
+    manifest { attributes([
+        'Specification-Title': 'susinstantswap',
+        'Specification-Version': '1.1.0',
+        'Implementation-Title': "Su's Instant Swap",
+        'Implementation-Version': '1.1.0',
+    ])}
+}
+
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
