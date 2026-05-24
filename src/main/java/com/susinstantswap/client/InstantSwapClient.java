@@ -49,7 +49,7 @@ public class InstantSwapClient {
     // ── 初始化 ──
 
     public static void init(SwapConfig cfg) {
-        LOGGER.info("[SusInstantSwap] v1.1.0 初始化客户端交换逻辑...");
+        LOGGER.info("[SusInstantSwap] v1.1.1 初始化客户端交换逻辑...");
         config = cfg;
         SWAP_KEY = new KeyMapping("key.susinstantswap.swap",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT,
