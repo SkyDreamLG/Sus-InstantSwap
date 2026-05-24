@@ -8,7 +8,7 @@ version="1.1.1"
 displayName="Su's Instant Swap"
 logoFile="susinstantswap/icon.png"
 authors="Su_Crispy"
-description="探囊取物 (Su's Instant Swap)：只需一个按键，就可拿出想要的物品。支持长�?短按双模式，短按切换物品栏，长按启用即时交换。支持创造、生存、冒险全部游戏模式�?
+description="Hold a key to open your inventory; release over a slot to instantly swap it with your hotbar selection. Supports long/short press dual modes, survival/creative/adventure game modes."
 
 [[dependencies.susinstantswap]]
 modId="neoforge"
