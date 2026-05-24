@@ -29,7 +29,7 @@ import java.lang.reflect.Modifier;
  * Sus-InstantSwap Fabric 1.20.1 客户端逻辑。
  *
  * 从 NeoForge 1.21 v1.1.0 直接迁移，适配 Fabric API 差异：
- *   - InputEvent.Key         → 边缘检测 (prevDown + GLFW 物理轮询)
+ *   - InputEvent.Key         → 边缘检测 (prevDown + SWAP_KEY.isDown() + GLFW轮询)
  *   - RegisterKeyMappingsEvent → KeyBindingHelper.registerKeyBinding
  *   - containerScreen.leftPos → 反射 getDeclaredField（Loom remap 安全）
  *   - getSlotUnderMouse()    → 反射 hoveredSlot（Loom remap 安全）
@@ -57,10 +57,11 @@ public class InstantSwapClient {
     private static Field hoveredSlotField;
     private static boolean hoveredSlotResolved;
 
-    // ── 改键支持：反射读取 KeyMapping.key（运行时绑定键）──
-    // Loom 会自动 remap getDeclaredField("key") 到 intermediary 名称
-    private static Field boundKeyField;
-    private static boolean boundKeyResolved;
+    // ── 改键支持：saveString() + InputConstants.getKey() ──
+    // 使用 MC 公开 API 读取运行时绑定键，避免反射的兼容性风险。
+    // KeyMapping.saveString() 返回当前绑定键的名称 (如 "key.keyboard.r")，
+    // InputConstants.getKey() 将其解析回 InputConstants.Key 对象。
+    private static boolean boundKeyLogged;
 
     // ═══════════════════════════════════════════════════════════
     // 初始化（端口：NF SusInstantSwapMod → Fabric ClientModInitializer）
@@ -100,8 +101,7 @@ public class InstantSwapClient {
         }
 
         boolean creative = mc.gameMode.hasInfiniteItems();
-        // ── GLFW 物理按键轮询（替代 NF 的 InputEvent.Key + SWAP_KEY.getKey()）──
-        // 注意：不使用 SWAP_KEY.isDown()，因 Fabric 中 OS 拦截 Alt 键后其状态不更新
+        // ── 按键检测：SWAP_KEY.isDown()（支持改键）+ GLFW 轮询（Alt 兜底）──
         boolean down = isSwapKeyDown();
 
         // ══ 第1步：边缘检测 — 替代 NF 的 InputEvent.Key ══
@@ -242,33 +242,49 @@ public class InstantSwapClient {
 
     /**
      * 读取 KeyMapping 的实际运行时绑定键（尊重改键）。
-     * 反射访问私有字段 "key"（Loom 会自动 remap 该字符串常量）。
-     * 若反射失败则降级到 getDefaultKey()（始终为 Alt）。
+     *
+     * 使用 MC 公开 API，完全不用反射：
+     *   KeyMapping.saveString() → 当前绑定键名 (如 "key.keyboard.r")
+     *   InputConstants.getKey() → 解析回 InputConstants.Key 对象
+     *
+     * 若解析失败（极端情况），降级到 getDefaultKey()（始终为默认键）。
      */
     private static InputConstants.Key getBoundKey() {
-        if (!boundKeyResolved) {
-            boundKeyResolved = true;
-            try {
-                boundKeyField = KeyMapping.class.getDeclaredField("key");
-                boundKeyField.setAccessible(true);
-            } catch (Exception e) {
-                boundKeyField = null;
+        try {
+            String keyName = SWAP_KEY.saveString();
+            InputConstants.Key result = InputConstants.getKey(keyName);
+            // 首次输出，方便在日志中确认改键是否生效
+            if (!boundKeyLogged) {
+                boundKeyLogged = true;
+                LOGGER.info("[SusInstantSwap] 当前绑定键: {} (默认: {})",
+                        keyName, SWAP_KEY.getDefaultKey().getName());
             }
+            return result;
+        } catch (Exception e) {
+            LOGGER.warn("[SusInstantSwap] getBoundKey 解析失败: {}", e.getMessage());
+            return SWAP_KEY.getDefaultKey();
         }
-        if (boundKeyField != null) {
-            try {
-                return (InputConstants.Key) boundKeyField.get(SWAP_KEY);
-            } catch (Exception ignored) {}
-        }
-        return SWAP_KEY.getDefaultKey();
     }
 
     /**
-     * GLFW 物理按键轮询（替代 NF 的 InputEvent.Key + SWAP_KEY.getKey()）。
-     * 直接读取物理键盘状态，不受 OS 拦截（如 Alt 激活菜单栏）影响。
-     * 使用 getBoundKey() 获取运行时绑定键以支持改键。
+     * 检测交换键是否当前按下（支持改键 + OS 拦截兜底）。
+     *
+     * 两层检测：
+     *   1. SWAP_KEY.isDown() — Fabric 标准 API
+     *      Fabric 会 hook 键盘输入来更新 KeyMapping 内部状态，
+     *      对于非修饰键（R/F/G 等）准确可靠。
+     *   2. GLFW 物理轮询 — OS 拦截兜底
+     *      Windows 的 Alt 键会被 OS 拦截（菜单栏激活），
+     *      导致 Fabric/GLFW 不产生按键事件，isDown() 返回 false。
+     *      此时直接用 GLFW 读物理键盘状态。
      */
     private static boolean isSwapKeyDown() {
+        if (SWAP_KEY == null) return false;
+
+        // 第1层：Fabric KeyMapping.isDown() — 标准改键检测
+        if (SWAP_KEY.isDown()) return true;
+
+        // 第2层：GLFW 物理轮询 — 处理 OS 拦截修饰键（如 Windows Alt）
         Minecraft mc = Minecraft.getInstance();
         long handle = mc.getWindow().getWindow();
         InputConstants.Key key = getBoundKey();

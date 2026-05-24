@@ -15,7 +15,6 @@ repositories {
 		name = 'Tencent Mirror'
 		url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/'
 	}
-	maven { url 'https://maven.shedaniel.me/' }
 	maven { url 'https://maven.terraformersmc.com/releases/' }
 }
 
@@ -40,9 +39,7 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-	// Cloth Config API — in-game config screen
-	modImplementation "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
-	// Mod Menu — config screen entry point
+	// Mod Menu — config screen entry point (optional, mod 仅在安装 ModMenu 时出现配置按钮)
 	modImplementation "com.terraformersmc:modmenu:${project.modmenu_version}"
 	
 }
