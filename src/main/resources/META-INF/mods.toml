@@ -8,8 +8,9 @@ version="${mod_version}"
 displayName="Su's Instant Swap"
 logoFile="susinstantswap/icon.png"
 description='''
-Instant item swap between inventory and hotbar with a single key press (default: Left Alt).
-Supports long-press mode, survival and creative modes, and mouse repositioning.
+Hold a key to open your inventory; release over a slot to instantly swap it with your hotbar selection.
+Supports long/short press dual modes, survival/creative/adventure game modes.
+Default key: Left Alt (can be changed in Controls settings).
 '''
 
 [[dependencies.susinstantswap]]
