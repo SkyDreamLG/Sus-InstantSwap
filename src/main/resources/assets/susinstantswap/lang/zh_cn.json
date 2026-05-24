@@ -4,6 +4,7 @@
   "susinstantswap.description": "按住Alt键：短按切换物品栏，长按启用即时交换。全游戏模式可用。",
 
   "config.susinstantswap.title": "探囊取物 - 配置",
+  "config.susinstantswap.category.general": "常规",
 
   "config.susinstantswap.longPressMode": "长短按模式",
   "config.susinstantswap.longPressMode.tooltip": "关闭后：仅保留长按交换",

@@ -1,9 +1,10 @@
-﻿{
+{
     "key.susinstantswap.swap": "Instant Swap",
     "key.categories.susinstantswap": "Su's Instant Swap",
     "susinstantswap.description": "Hold Alt: short press toggles inventory, long press for instant swap. Works in all game modes.",
 
     "config.susinstantswap.title": "Su's Instant Swap Config",
+    "config.susinstantswap.category.general": "General",
 
     "config.susinstantswap.longPressMode": "Long/Short Press Mode",
     "config.susinstantswap.longPressMode.tooltip": "When OFF: only long-press swap remains",
