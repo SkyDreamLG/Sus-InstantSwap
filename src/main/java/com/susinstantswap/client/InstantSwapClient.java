@@ -13,7 +13,12 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.DispenserMenu;
+import net.minecraft.world.inventory.HopperMenu;
+import net.minecraft.world.inventory.ShulkerBoxMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
@@ -25,8 +30,6 @@ import net.neoforged.neoforge.client.event.RenderTooltipEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
-
-import java.util.Objects;
 
 public class InstantSwapClient {
 
@@ -279,9 +282,14 @@ public class InstantSwapClient {
     // ── 界面中更换 ──
 
     /**
-     * 在容器/物品栏界面中执行即时交换并关闭界面。
-     * 返回 true 表示成功执行了交换，false 表示无有效目标（悬停槽位无物品等）。
-     * 支持所有原版容器：熔炉、箱子、工作台、铁砧、附魔台、酿造台等。
+     * 在玩家物品栏或纯存储容器中执行即时交换并关闭界面。
+     * 返回 true 表示成功执行了交换，false 表示无有效目标或不允许的容器。
+     *
+     * 支持范围：
+     *   - 玩家物品栏（槽位 9-44，排除盔甲/副手/合成格）
+     *   - 创造模式物品栏
+     *   - 纯存储容器：箱子、陷阱箱、木桶、潜影盒、漏斗、发射器、投掷器
+     * 排除范围：熔炉、工作台、铁砧、附魔台、酿造台等含特殊功能槽的容器。
      */
     private static boolean performGuiSwap(Minecraft mc, boolean creative) {
         if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
@@ -295,12 +303,40 @@ public class InstantSwapClient {
         int hoveredIndex = hoveredSlot.index;
         int selectedHotbar = mc.player.getInventory().selected;
 
-        boolean didSwap;
-        if (creative && screen instanceof CreativeModeInventoryScreen creativeScreen) {
-            // 创造模式物品栏：特殊处理（创造标签页、SlotWrapper 等）
-            didSwap = performGuiCreativeSwap(mc, creativeScreen);
+        boolean slotAllowed;
+        boolean useCreativeSwap = false;
+
+        if (screen instanceof InventoryScreen) {
+            // 生存/冒险玩家物品栏：仅允许背包+快捷栏区域（9-44）
+            int hotbarMenuSlot = selectedHotbar + 36;
+            slotAllowed = isAllowedMenuSlot(hoveredIndex) && hoveredIndex != hotbarMenuSlot;
+        } else if (screen instanceof CreativeModeInventoryScreen) {
+            // 创造模式物品栏：由 performGuiCreativeSwap 自行校验
+            if (creative) {
+                useCreativeSwap = true;
+                slotAllowed = true;
+            } else {
+                slotAllowed = false;
+            }
+        } else if (isStorageContainerMenu(screen.getMenu())) {
+            // 纯存储容器（箱子/木桶/漏斗/发射器/投掷器/潜影盒）：
+            // 所有槽位均可交换，含容器格和玩家物品栏格
+            slotAllowed = true;
         } else {
-            // 生存/冒险模式物品栏 + 所有原版容器（熔炉、箱子、工作台、铁砧等）
+            // 其他容器（熔炉/工作台/铁砧/附魔台/酿造台等）：不参与 GUI 交换
+            debugLog("GUI交换: 非纯存储容器, 跳过");
+            return false;
+        }
+
+        if (!slotAllowed) {
+            debugLog("GUI交换: 不允许的槽位 (悬停=" + hoveredIndex + ")");
+            return false;
+        }
+
+        boolean didSwap;
+        if (useCreativeSwap) {
+            didSwap = performGuiCreativeSwap(mc, (CreativeModeInventoryScreen) screen);
+        } else {
             didSwap = performGuiContainerSwap(screen, hoveredIndex, selectedHotbar);
         }
 
@@ -313,6 +349,18 @@ public class InstantSwapClient {
             return true;
         }
         return false;
+    }
+
+    /**
+     * 判断容器菜单是否为纯存储类型（无可交换限制的功能槽）。
+     * 涵盖 ChestMenu（箱子/陷阱箱/木桶）、潜影盒、漏斗、发射器/投掷器。
+     * 大多数模组存储容器继承自 ChestMenu，可自动兼容。
+     */
+    private static boolean isStorageContainerMenu(AbstractContainerMenu menu) {
+        return menu instanceof ChestMenu
+                || menu instanceof ShulkerBoxMenu
+                || menu instanceof HopperMenu
+                || menu instanceof DispenserMenu;
     }
 
     /**
