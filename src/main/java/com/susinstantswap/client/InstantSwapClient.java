@@ -281,6 +281,7 @@ public class InstantSwapClient {
     /**
      * 在容器/物品栏界面中执行即时交换并关闭界面。
      * 返回 true 表示成功执行了交换，false 表示无有效目标（悬停槽位无物品等）。
+     * 支持所有原版容器：熔炉、箱子、工作台、铁砧、附魔台、酿造台等。
      */
     private static boolean performGuiSwap(Minecraft mc, boolean creative) {
         if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
@@ -294,20 +295,13 @@ public class InstantSwapClient {
         int hoveredIndex = hoveredSlot.index;
         int selectedHotbar = mc.player.getInventory().selected;
 
-        // 玩家物品栏界面的槽位范围验证
-        if (screen instanceof InventoryScreen) {
-            int hotbarMenuSlot = selectedHotbar + 36;
-            if (!isAllowedMenuSlot(hoveredIndex) || hoveredIndex == hotbarMenuSlot) {
-                debugLog("GUI交换: 不允许的槽位 (悬停=" + hoveredIndex + ")");
-                return false;
-            }
-        }
-
         boolean didSwap;
         if (creative && screen instanceof CreativeModeInventoryScreen creativeScreen) {
+            // 创造模式物品栏：特殊处理（创造标签页、SlotWrapper 等）
             didSwap = performGuiCreativeSwap(mc, creativeScreen);
         } else {
-            didSwap = performGuiContainerSwap(mc, hoveredIndex, selectedHotbar);
+            // 生存/冒险模式物品栏 + 所有原版容器（熔炉、箱子、工作台、铁砧等）
+            didSwap = performGuiContainerSwap(screen, hoveredIndex, selectedHotbar);
         }
 
         if (didSwap) {
@@ -321,15 +315,21 @@ public class InstantSwapClient {
         return false;
     }
 
-    /** 通用容器交换：发送 ClickType.SWAP 数据包 */
-    private static boolean performGuiContainerSwap(Minecraft mc, int hoveredIndex, int selectedHotbar) {
-        int containerId = mc.player.inventoryMenu.containerId;
-        int stateId = mc.player.inventoryMenu.getStateId();
+    /**
+     * 通用容器交换：发送 ClickType.SWAP 数据包。
+     * 使用 screen.getMenu() 获取正确的容器 ID 和状态 ID（而非 mc.player.inventoryMenu，
+     * 后者始终返回玩家物品栏窗口 ID=0，会导致外部容器交换被服务器拒绝）。
+     */
+    private static boolean performGuiContainerSwap(AbstractContainerScreen<?> screen, int hoveredIndex, int selectedHotbar) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.getConnection() == null) return false;
+
+        int containerId = screen.getMenu().containerId;
+        int stateId = screen.getMenu().getStateId();
         Int2ObjectOpenHashMap<ItemStack> changedSlots = new Int2ObjectOpenHashMap<>();
         ServerboundContainerClickPacket packet = new ServerboundContainerClickPacket(
                 containerId, stateId, hoveredIndex, selectedHotbar,
                 ClickType.SWAP, ItemStack.EMPTY, changedSlots);
-        if (mc.getConnection() == null) return false;
         mc.getConnection().send(packet);
         return true;
     }
@@ -362,8 +362,9 @@ public class InstantSwapClient {
         if (hoveredSlot instanceof CreativeModeInventoryScreen.SlotWrapper wrapper) {
             int targetMenuSlot = wrapper.target.index;
             if (isAllowedMenuSlot(targetMenuSlot) && targetMenuSlot != heldSlotIndex) {
-                ItemStack targetItem = mc.player.inventoryMenu.getSlot(targetMenuSlot).getItem().copy();
-                ItemStack heldItem = mc.player.inventoryMenu.getSlot(heldSlotIndex).getItem().copy();
+                // 使用 screen 的菜单读取槽位物品（screen.getMenu() 即为当前显示的容器菜单）
+                ItemStack targetItem = creativeScreen.getMenu().getSlot(targetMenuSlot).getItem().copy();
+                ItemStack heldItem = creativeScreen.getMenu().getSlot(heldSlotIndex).getItem().copy();
                 mc.gameMode.handleCreativeModeItemAdd(targetItem, heldSlotIndex);
                 mc.gameMode.handleCreativeModeItemAdd(heldItem, targetMenuSlot);
                 return true;
