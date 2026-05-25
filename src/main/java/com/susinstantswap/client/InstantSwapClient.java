@@ -13,12 +13,7 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.ClickType;
-import net.minecraft.world.inventory.DispenserMenu;
-import net.minecraft.world.inventory.HopperMenu;
-import net.minecraft.world.inventory.ShulkerBoxMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
@@ -53,7 +48,7 @@ public class InstantSwapClient {
     // ── 初始化 ──
 
     public static void init(SwapConfig cfg) {
-        LOGGER.info("[SusInstantSwap] v1.1.1 初始化客户端交换逻辑...");
+        LOGGER.info("[SusInstantSwap] v1.2.0 初始化客户端交换逻辑...");
         config = cfg;
         SWAP_KEY = new KeyMapping("key.susinstantswap.swap",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT,
@@ -282,14 +277,8 @@ public class InstantSwapClient {
     // ── 界面中更换 ──
 
     /**
-     * 在玩家物品栏或纯存储容器中执行即时交换并关闭界面。
-     * 返回 true 表示成功执行了交换，false 表示无有效目标或不允许的容器。
-     *
-     * 支持范围：
-     *   - 玩家物品栏（槽位 9-44，排除盔甲/副手/合成格）
-     *   - 创造模式物品栏
-     *   - 纯存储容器：箱子、陷阱箱、木桶、潜影盒、漏斗、发射器、投掷器
-     * 排除范围：熔炉、工作台、铁砧、附魔台、酿造台等含特殊功能槽的容器。
+     * 在玩家物品栏中执行即时交换并关闭界面。
+     * 仅支持玩家物品栏和创造模式物品栏；其他容器（箱子/熔炉等）不参与 GUI 交换。
      */
     private static boolean performGuiSwap(Minecraft mc, boolean creative) {
         if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
@@ -303,70 +292,40 @@ public class InstantSwapClient {
         int hoveredIndex = hoveredSlot.index;
         int selectedHotbar = mc.player.getInventory().selected;
 
-        boolean slotAllowed;
-        boolean useCreativeSwap = false;
+        // ── 创造模式物品栏 ──
+        if (screen instanceof CreativeModeInventoryScreen) {
+            if (!creative) return false;
+            if (performGuiCreativeSwap(mc, (CreativeModeInventoryScreen) screen)) {
+                playSwapSound(mc);
+                if (mc.player != null) mc.player.closeContainer();
+                return true;
+            }
+            return false;
+        }
 
+        // ── 生存/冒险物品栏：仅允许背包+快捷栏（9-44）──
         if (screen instanceof InventoryScreen) {
-            // 生存/冒险玩家物品栏：仅允许背包+快捷栏区域（9-44）
             int hotbarMenuSlot = selectedHotbar + 36;
-            slotAllowed = isAllowedMenuSlot(hoveredIndex) && hoveredIndex != hotbarMenuSlot;
-        } else if (screen instanceof CreativeModeInventoryScreen) {
-            // 创造模式物品栏：由 performGuiCreativeSwap 自行校验
-            if (creative) {
-                useCreativeSwap = true;
-                slotAllowed = true;
-            } else {
-                slotAllowed = false;
+            if (!isAllowedMenuSlot(hoveredIndex) || hoveredIndex == hotbarMenuSlot) {
+                debugLog("GUI交换: 不允许的槽位 (悬停=" + hoveredIndex + ")");
+                return false;
             }
-        } else if (isStorageContainerMenu(screen.getMenu())) {
-            // 纯存储容器（箱子/木桶/漏斗/发射器/投掷器/潜影盒）：
-            // 所有槽位均可交换，含容器格和玩家物品栏格
-            slotAllowed = true;
-        } else {
-            // 其他容器（熔炉/工作台/铁砧/附魔台/酿造台等）：不参与 GUI 交换
-            debugLog("GUI交换: 非纯存储容器, 跳过");
+            if (performGuiContainerSwap(screen, hoveredIndex, selectedHotbar)) {
+                playSwapSound(mc);
+                if (mc.player != null) mc.player.closeContainer();
+                debugLog("GUI交换完成: 槽位" + hoveredIndex + " <-> 快捷栏" + selectedHotbar);
+                return true;
+            }
             return false;
         }
 
-        if (!slotAllowed) {
-            debugLog("GUI交换: 不允许的槽位 (悬停=" + hoveredIndex + ")");
-            return false;
-        }
-
-        boolean didSwap;
-        if (useCreativeSwap) {
-            didSwap = performGuiCreativeSwap(mc, (CreativeModeInventoryScreen) screen);
-        } else {
-            didSwap = performGuiContainerSwap(screen, hoveredIndex, selectedHotbar);
-        }
-
-        if (didSwap) {
-            playSwapSound(mc);
-            if (mc.player != null) {
-                mc.player.closeContainer();
-            }
-            debugLog("GUI交换完成: 槽位" + hoveredIndex + " <-> 快捷栏" + selectedHotbar);
-            return true;
-        }
+        // 其他容器：不支持 GUI 交换
         return false;
     }
 
     /**
-     * 判断容器菜单是否为纯存储类型（无可交换限制的功能槽）。
-     * 涵盖 ChestMenu（箱子/陷阱箱/木桶）、潜影盒、漏斗、发射器/投掷器。
-     * 大多数模组存储容器继承自 ChestMenu，可自动兼容。
-     */
-    private static boolean isStorageContainerMenu(AbstractContainerMenu menu) {
-        return menu instanceof ChestMenu
-                || menu instanceof ShulkerBoxMenu
-                || menu instanceof HopperMenu
-                || menu instanceof DispenserMenu;
-    }
-
-    /**
-     * 通用容器交换：发送 ClickType.SWAP 数据包。
-     * 使用 screen.getMenu() 获取正确的容器 ID 和状态 ID（而非 mc.player.inventoryMenu，
-     * 后者始终返回玩家物品栏窗口 ID=0，会导致外部容器交换被服务器拒绝）。
+     * 发送 ClickType.SWAP 数据包，将悬停槽位与热键栏槽位交换。
+     * 使用 screen.getMenu() 获取菜单信息，兼容玩家物品栏和创造模式物品栏。
      */
     private static boolean performGuiContainerSwap(AbstractContainerScreen<?> screen, int hoveredIndex, int selectedHotbar) {
         Minecraft mc = Minecraft.getInstance();
