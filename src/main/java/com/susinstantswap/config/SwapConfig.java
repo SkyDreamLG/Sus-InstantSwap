@@ -14,9 +14,9 @@ public class SwapConfig {
     public final ModConfigSpec.BooleanValue longPressMode;
     public final ModConfigSpec.IntValue holdThresholdMs;
     public final ModConfigSpec.BooleanValue soundEnabled;
+    public final ModConfigSpec.BooleanValue mouseReposition;
     public final ModConfigSpec.BooleanValue guiSwapEnabled;
     public final ModConfigSpec.BooleanValue debug;
-    public final ModConfigSpec.BooleanValue mouseReposition;
     public SwapConfig(ModConfigSpec.Builder builder) {
         builder.comment("Su's Instant Swap Configuration",
                 "",
@@ -68,7 +68,7 @@ public class SwapConfig {
                         "will swap the item and close the screen.",
                         "Can use a dedicated key binding (Swap in GUI) or",
                         "follow the Instant Swap key.")
-                .define("guiSwapEnabled", true);
+                .define("guiSwapEnabled", false);
 
         // -----------------------------
         //  Debug
