@@ -148,6 +148,36 @@ public class InstantSwapClient {
         boolean keyDown = (action == GLFW.GLFW_PRESS);
         boolean creative = mc.gameMode.hasInfiniteItems();
 
+        // ── 检测哪个按键被触发 ──
+        boolean isSwapKey = isSwapKeyEvent(event);
+        boolean isGuiSwapKey = isGuiSwapKeyEvent(event);
+
+        // ── GUI 交换 (仅响应 PRESS，与状态无关) ──
+        if (keyDown && config.guiSwapEnabled.get()) {
+            // 判断是否为有效的 GUI 交换触发键：
+            //   - SWAP_IN_GUI_KEY 已指定 → 用它的按键
+            //   - SWAP_IN_GUI_KEY 未指定 → 跟随 SWAP_KEY
+            boolean triggerGuiSwap = isGuiSwapKey
+                    || (isSwapKey && isKeyUnassigned(SWAP_IN_GUI_KEY));
+
+            if (triggerGuiSwap && mc.screen instanceof AbstractContainerScreen) {
+                if (performGuiSwap(mc, creative)) {
+                    debugLog("KeyEvent: 界面中更换完成");
+                    state = SwapState.IDLE;
+                    return;
+                }
+            }
+
+            // 纯界面模式：只指定了界面中更换键，未指定即时交换键
+            if (isGuiSwapKey && isKeyUnassigned(SWAP_KEY)) {
+                return;
+            }
+        }
+
+        // ── 正常的即时交换逻辑 ──
+        // 只处理 SWAP_KEY 触发的按键事件（尊重用户在控制菜单的改键）
+        if (!isSwapKeyEvent(event)) return;
+
         if (keyDown) {
             // ── 按键按下：立即打开物品栏 ──
             if (!canInteract(mc)) return;
