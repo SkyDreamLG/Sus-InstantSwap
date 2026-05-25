@@ -16,6 +16,9 @@
 	"entrypoints": {
 		"client": [
 			"com.susinstantswap.SusInstantSwapMod"
+		],
+		"modmenu": [
+			"com.susinstantswap.config.ModMenuIntegration"
 		]
 	},
 	"depends": {
@@ -23,5 +26,11 @@
 		"minecraft": ">=1.21 <1.21.2",
 		"java": ">=21",
 		"fabric-api": "*"
-	}
+	},
+	"suggests": {
+		"modmenu": ">=11.0.0"
+	},
+	"mixins": [
+		"susinstantswap.mixins.json"
+	]
 }

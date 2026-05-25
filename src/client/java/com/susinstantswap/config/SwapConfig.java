@@ -23,8 +23,9 @@ public class SwapConfig {
     @Expose public boolean longPressMode = true;
     @Expose public int holdThresholdMs = 200;
     @Expose public boolean soundEnabled = true;
-    @Expose public boolean debug = false;
     @Expose public boolean mouseReposition = true;
+    @Expose public boolean guiSwapEnabled = false;
+    @Expose public boolean debug = false;
 
     private static SwapConfig INSTANCE;
     private static Path configPath;
@@ -43,8 +44,8 @@ public class SwapConfig {
         if (file.exists()) {
             try (Reader reader = new FileReader(file)) {
                 INSTANCE = GSON.fromJson(reader, SwapConfig.class);
-                LOGGER.info("[SusInstantSwap] 配置已加载: longPressMode={}, holdThresholdMs={}, soundEnabled={}, debug={}, mouseReposition={}",
-                        INSTANCE.longPressMode, INSTANCE.holdThresholdMs, INSTANCE.soundEnabled, INSTANCE.debug, INSTANCE.mouseReposition);
+                LOGGER.info("[SusInstantSwap] 配置已加载: longPressMode={}, holdThresholdMs={}, soundEnabled={}, mouseReposition={}, guiSwapEnabled={}, debug={}",
+                        INSTANCE.longPressMode, INSTANCE.holdThresholdMs, INSTANCE.soundEnabled, INSTANCE.mouseReposition, INSTANCE.guiSwapEnabled, INSTANCE.debug);
             } catch (Exception e) {
                 LOGGER.warn("[SusInstantSwap] 配置加载失败，使用默认值: {}", e.getMessage());
             }
@@ -55,6 +56,7 @@ public class SwapConfig {
     }
 
     public static void save() {
+        if (configPath == null || INSTANCE == null) return;
         try {
             configPath.getParent().toFile().mkdirs();
             try (Writer writer = new FileWriter(configPath.toFile())) {

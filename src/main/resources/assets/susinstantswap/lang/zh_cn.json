@@ -1,9 +1,11 @@
 {
   "key.susinstantswap.swap": "即时交换",
+  "key.susinstantswap.swap_in_gui": "界面中更换",
   "key.categories.susinstantswap": "探囊取物",
   "susinstantswap.description": "按住Alt键：短按切换物品栏，长按启用即时交换。全游戏模式可用。",
 
   "config.susinstantswap.title": "探囊取物 - 配置",
+  "config.susinstantswap.category.general": "常规",
 
   "config.susinstantswap.longPressMode": "长短按模式",
   "config.susinstantswap.longPressMode.tooltip": "关闭后：仅保留长按交换",
@@ -16,6 +18,9 @@
 
   "config.susinstantswap.mouseReposition": "鼠标重定位",
   "config.susinstantswap.mouseReposition.tooltip": "打开物品栏时自动将鼠标移动到界面右下角。",
+
+  "config.susinstantswap.guiSwapEnabled": "界面中更换",
+  "config.susinstantswap.guiSwapEnabled.tooltip": "开启后，在物品栏中悬停物品时短按交换键可直接交换并关闭界面。",
 
   "config.susinstantswap.debug": "调试日志",
   "config.susinstantswap.debug.tooltip": "输出调试信息到游戏日志。",
