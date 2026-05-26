@@ -7,55 +7,71 @@ plugins {
 }
 
 base {
-    archivesName = 'Sus_InstantSwap-1.1.0-Forge26.1'
+    archivesName = 'Sus_InstantSwap-1.2.0-Forge26.1'
 }
 
-// Use JDK 25 (set via JAVA_HOME)
+version = '1.2.0'
+group = 'com.susinstantswap'
 
-sourceSets.main.resources { srcDir 'src/generated/resources' }
+// Mojang ships Java 25 for 26.1+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 minecraft {
     runs {
         configureEach {
             workingDir = layout.projectDirectory.dir('run')
+
+            systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
             systemProperty 'forge.enabledGameTestNamespaces', 'susinstantswap'
         }
+
         register('client')
-        register('server') { args '--nogui' }
+
+        register('server') {
+            args '--nogui'
+        }
     }
 }
 
 repositories {
-    // China mirrors for faster/accessible downloads
-    maven { url = 'https://maven.aliyun.com/repository/public' }
-    maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
     minecraft.mavenizer(it)
     maven fg.forgeMaven
     maven fg.minecraftLibsMaven
     mavenCentral()
+    maven { url = 'https://maven.aliyun.com/repository/public/' }
+    maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
 }
 
 dependencies {
-    implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
+    implementation minecraft.dependency('net.minecraftforge:forge:26.1-62.0.9')
+    annotationProcessor 'net.minecraftforge:eventbus-validator:7.0.1'
 }
 
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
-            minecraft_version: minecraft_version, forge_version: forge_version,
-            mod_id: 'susinstantswap', mod_version: '1.1.0',
+            minecraft_version: '26.1',
+            forge_version: '62.0.9',
+            mod_id: 'susinstantswap',
+            mod_version: '1.2.0',
     ]
     inputs.properties replaceProperties
-    filesMatching(['META-INF/mods.toml']) { expand replaceProperties }
+    filesMatching(['META-INF/mods.toml']) {
+        expand replaceProperties
+    }
 }
 
 tasks.named('jar', Jar).configure {
     archiveVersion = ''
-    manifest { attributes([
-        'Specification-Title': 'susinstantswap',
-        'Specification-Version': '1.1.0',
-        'Implementation-Title': "Su's Instant Swap",
-        'Implementation-Version': '1.1.0',
-    ])}
+    manifest {
+        attributes([
+                'Specification-Title'     : 'susinstantswap',
+                'Specification-Version'   : '1.2.0',
+                'Implementation-Title'    : "Su's Instant Swap",
+                'Implementation-Version'  : '1.2.0',
+        ])
+    }
 }
 
-tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

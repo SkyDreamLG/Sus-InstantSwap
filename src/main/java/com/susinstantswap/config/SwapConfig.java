@@ -3,51 +3,93 @@ package com.susinstantswap.config;
 import net.minecraftforge.common.ForgeConfigSpec;
 
 /**
- * Sus-InstantSwap configuration — Forge ForgeConfigSpec based.
+ * Sus-InstantSwap Forge 1.21.1 配置。
  *
- * Config file location: config/susinstantswap-client.toml
- * Changes take effect immediately — no restart needed.
+ * 双层设计：
+ *   ForgeConfigSpec 层 — 负责文件持久化（config/susinstantswap-client.toml）
+ *   Runtime 层        — 运行时可变值，配置界面直接修改，InstantSwapClient 实时读取
+ *
+ * 从 Fabric 1.20.1 Gson 配置移植，适配 Forge 配置系统。
  */
 public class SwapConfig {
 
+    // ═══════════ ForgeConfigSpec 层（文件持久化）═══════════
     public final ForgeConfigSpec.BooleanValue longPressMode;
     public final ForgeConfigSpec.IntValue holdThresholdMs;
     public final ForgeConfigSpec.BooleanValue soundEnabled;
-    public final ForgeConfigSpec.BooleanValue debug;
     public final ForgeConfigSpec.BooleanValue mouseReposition;
+    public final ForgeConfigSpec.BooleanValue guiSwapEnabled;
+    public final ForgeConfigSpec.BooleanValue debug;
+
+    // ═══════════ Runtime 层（即时可变，游戏内修改立即生效）═══════════
+    public static boolean longPressModeRuntime = true;
+    public static int holdThresholdMsRuntime = 200;
+    public static boolean soundEnabledRuntime = true;
+    public static boolean mouseRepositionRuntime = true;
+    public static boolean guiSwapEnabledRuntime = false;
+    public static boolean debugRuntime = false;
 
     public SwapConfig(ForgeConfigSpec.Builder builder) {
         builder.comment("Su's Instant Swap Configuration",
                 "",
                 "Changes take effect immediately. No restart needed.",
-                "You can also edit these in-game via the mod config screen.");
+                "You can also edit the config file directly at config/susinstantswap-client.toml");
 
         longPressMode = builder
-                .translation("config.susinstantswap.longPressMode")
-                .comment("", "Long/Short Press Mode",
-                        "  true  = Short press toggles inventory, long press swaps",
+                .comment("",
+                        "Long/Short Press Mode",
+                        "  true  = Short press toggles inventory, long press swaps (default)",
                         "  false = Classic mode (hold to open, release to swap)")
                 .define("longPressMode", true);
 
         holdThresholdMs = builder
-                .translation("config.susinstantswap.holdThresholdMs")
-                .comment("", "Long Press Threshold (ms). Range: 50 ~ 1000")
+                .comment("",
+                        "Long Press Threshold (ms). Range: 50 ~ 1000")
                 .defineInRange("holdThresholdMs", 200, 50, 1000);
 
         soundEnabled = builder
-                .translation("config.susinstantswap.soundEnabled")
-                .comment("", "Swap Sound")
+                .comment("",
+                        "Swap Sound — play item pickup sound on swap")
                 .define("soundEnabled", true);
 
         mouseReposition = builder
-                .translation("config.susinstantswap.mouseReposition")
-                .comment("", "Mouse Reposition",
-                        "Automatically move cursor to bottom-right when inventory opens")
+                .comment("",
+                        "Mouse Reposition — auto-move cursor to bottom-right when inventory opens")
                 .define("mouseReposition", true);
 
+        guiSwapEnabled = builder
+                .comment("",
+                        "GUI Swap — when enabled, press the swap key while hovering over an item",
+                        "in an inventory/container screen to swap and close the screen immediately")
+                .define("guiSwapEnabled", false);
+
         debug = builder
-                .translation("config.susinstantswap.debug")
-                .comment("", "Debug Logging")
+                .comment("",
+                        "Debug Logging — print detailed swap info to game log")
                 .define("debug", false);
+    }
+
+    /**
+     * 从 ForgeConfigSpec 同步到 Runtime 层（ModConfigEvent.Loading 时调用）。
+     */
+    public void syncToRuntime() {
+        longPressModeRuntime = longPressMode.get();
+        holdThresholdMsRuntime = holdThresholdMs.get();
+        soundEnabledRuntime = soundEnabled.get();
+        mouseRepositionRuntime = mouseReposition.get();
+        guiSwapEnabledRuntime = guiSwapEnabled.get();
+        debugRuntime = debug.get();
+    }
+
+    /**
+     * 从 Runtime 层同步到 ForgeConfigSpec（配置界面保存时调用）。
+     */
+    public void syncToSpec() {
+        longPressMode.set(longPressModeRuntime);
+        holdThresholdMs.set(holdThresholdMsRuntime);
+        soundEnabled.set(soundEnabledRuntime);
+        mouseReposition.set(mouseRepositionRuntime);
+        guiSwapEnabled.set(guiSwapEnabledRuntime);
+        debug.set(debugRuntime);
     }
 }
