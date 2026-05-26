@@ -70,7 +70,7 @@ public class SwapConfig {
     }
 
     /**
-     * 从 ForgeConfigSpec 同步到 Runtime 层（启动时调用一次）。
+     * 从 ForgeConfigSpec 同步到 Runtime 层（registerConfig 之后调用）。
      */
     public void syncToRuntime() {
         longPressModeRuntime = longPressMode.get();
@@ -79,5 +79,17 @@ public class SwapConfig {
         mouseRepositionRuntime = mouseReposition.get();
         guiSwapEnabledRuntime = guiSwapEnabled.get();
         debugRuntime = debug.get();
+    }
+
+    /**
+     * 从 Runtime 层同步到 ForgeConfigSpec（配置界面保存时调用）。
+     */
+    public void syncToSpec() {
+        longPressMode.set(longPressModeRuntime);
+        holdThresholdMs.set(holdThresholdMsRuntime);
+        soundEnabled.set(soundEnabledRuntime);
+        mouseReposition.set(mouseRepositionRuntime);
+        guiSwapEnabled.set(guiSwapEnabledRuntime);
+        debug.set(debugRuntime);
     }
 }

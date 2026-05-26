@@ -2,6 +2,7 @@ package com.susinstantswap.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.logging.LogUtils;
+import com.susinstantswap.SusInstantSwapMod;
 import com.susinstantswap.config.SwapConfig;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.KeyMapping;
@@ -120,6 +121,8 @@ public class InstantSwapClient {
         // ── 首次日志 ──
         if (!configLogged) {
             configLogged = true;
+            // 防御性同步：确保 Runtime 已从 Spec 加载（belt-and-suspenders）
+            SusInstantSwapMod.CONFIG.syncToRuntime();
             LOGGER.info("[SusInstantSwap] 配置: longPressMode={}, holdThresholdMs={}, soundEnabled={}, mouseReposition={}, guiSwapEnabled={}, debug={}",
                     SwapConfig.longPressModeRuntime, SwapConfig.holdThresholdMsRuntime,
                     SwapConfig.soundEnabledRuntime, SwapConfig.mouseRepositionRuntime, SwapConfig.guiSwapEnabledRuntime, SwapConfig.debugRuntime);
