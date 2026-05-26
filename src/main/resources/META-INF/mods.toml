@@ -4,6 +4,7 @@ license="LGPL-3.0"
 
 [[mods]]
 modId="susinstantswap"
+side="CLIENT"
 version="${mod_version}"
 displayName="Su's Instant Swap"
 logoFile="assets/susinstantswap/icon.png"
