@@ -269,10 +269,7 @@ public class InstantSwapClient {
         if (mc.screen != prevScreen) {
             return;
         }
-        mc.player.closeContainer();
-        if (mc.screen != null) {
-            mc.setScreen(null);
-        }
+        mc.setScreen(null);
     }
 
     private static boolean canInteract(Minecraft mc) {
