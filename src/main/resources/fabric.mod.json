@@ -29,5 +29,8 @@
 	},
 	"suggests": {
 		"modmenu": ">=7.0.0"
-	}
+	},
+	"mixins": [
+		"susinstantswap.mixins.json"
+	]
 }

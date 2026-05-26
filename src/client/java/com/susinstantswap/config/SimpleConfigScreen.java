@@ -63,6 +63,14 @@ public class SimpleConfigScreen extends Screen {
                 v -> config.mouseReposition = v));
         y += SPACING;
 
+        // ── 界面中更换开关 ──
+        addRenderableWidget(createToggle(
+                centerX, y,
+                "config.susinstantswap.guiSwapEnabled",
+                config.guiSwapEnabled,
+                v -> config.guiSwapEnabled = v));
+        y += SPACING;
+
         // ── 调试日志开关 ──
         addRenderableWidget(createToggle(
                 centerX, y,

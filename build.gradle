@@ -28,6 +28,10 @@ loom {
 		}
 	}
 
+	mixin {
+		useLegacyMixinAp = false
+	}
+
 }
 
 dependencies {
