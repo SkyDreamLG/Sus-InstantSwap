@@ -260,11 +260,10 @@ public class InstantSwapClient {
      * 如果屏幕未消费按键，则关闭容器/物品栏。
      */
     private static void simulateVanillaInventoryKey(Minecraft mc) {
-        // Fabric Mojang 映射中 KeyMapping 无 getKey()，改用 saveString() + InputConstants.getKey()
-        InputConstants.Key invKey = InputConstants.getKey(mc.options.keyInventory.saveString());
-        boolean handled = mc.screen.keyPressed(invKey.getValue(), 0, 0);
-        if (!handled) {
-            mc.player.closeContainer();
+        Screen prevScreen = mc.screen;
+        prevScreen.removed();
+        if (mc.screen == prevScreen) {
+            mc.setScreen(null);
         }
     }
 
