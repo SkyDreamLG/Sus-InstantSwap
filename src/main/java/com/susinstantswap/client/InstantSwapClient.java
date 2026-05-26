@@ -175,13 +175,7 @@ public class InstantSwapClient {
 
         // ── 正常的即时交换逻辑 ──
         // 只处理 SWAP_KEY 触发的按键事件（尊重用户在控制菜单的改键）
-<<<<<<< HEAD
         if (!isSwapKeyEvent(event)) return;
-=======
-        InputConstants.Key boundKey = SWAP_KEY.getKey();
-        if (boundKey.getType() != InputConstants.Type.KEYSYM) return;
-        if (event.getKey() != boundKey.getValue()) return;
->>>>>>> test
 
         if (keyDown) {
             // ── 按键按下：立即打开物品栏 ──
@@ -193,7 +187,7 @@ public class InstantSwapClient {
                 // 物品栏已打开：按键只关闭物品栏，不进入交换流程
                 if (alreadyOnInventory) {
                     if (!isVanillaInventoryKey()) {
-                        mc.setScreen(null);
+                        mc.player.closeContainer();
                     }
                     debugLog("KeyEvent: 物品栏已打开 → 关闭物品栏");
                     return;
