@@ -1,7 +1,7 @@
 {
   "key.susinstantswap.swap": "即时交换",
   "key.susinstantswap.swap_in_gui": "界面中更换",
-  "key.categories.susinstantswap": "探囊取物",
+  "key.category.susinstantswap.main": "探囊取物",
   "susinstantswap.description": "按住Alt键：短按切换物品栏，长按启用即时交换。全游戏模式可用。",
 
   "config.susinstantswap.title": "探囊取物 - 配置",
