@@ -15,8 +15,8 @@ public class SusInstantSwapMod implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        LOGGER.info("[SusInstantSwap] v1.1.0-Fabric26.1 — 客户端初始化");
+        LOGGER.info("[SusInstantSwap] v1.2.0-Fabric26.1 — 客户端初始化");
         InstantSwapClient.init();
-        LOGGER.info("[SusInstantSwap] v1.1.0-Fabric26.1 — 初始化完成");
+        LOGGER.info("[SusInstantSwap] v1.2.0-Fabric26.1 — 初始化完成");
     }
 }

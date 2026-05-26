@@ -25,6 +25,7 @@ public class SwapConfig {
     @Expose public boolean soundEnabled = true;
     @Expose public boolean debug = false;
     @Expose public boolean mouseReposition = true;
+    @Expose public boolean guiSwapEnabled = false;
 
     private static SwapConfig INSTANCE;
     private static Path configPath;
@@ -42,9 +43,16 @@ public class SwapConfig {
         File file = configPath.toFile();
         if (file.exists()) {
             try (Reader reader = new FileReader(file)) {
-                INSTANCE = GSON.fromJson(reader, SwapConfig.class);
-                LOGGER.info("[SusInstantSwap] 配置已加载: longPressMode={}, holdThresholdMs={}, soundEnabled={}, debug={}, mouseReposition={}",
-                        INSTANCE.longPressMode, INSTANCE.holdThresholdMs, INSTANCE.soundEnabled, INSTANCE.debug, INSTANCE.mouseReposition);
+                SwapConfig loaded = GSON.fromJson(reader, SwapConfig.class);
+                // Merge loaded values
+                INSTANCE.longPressMode = loaded.longPressMode;
+                INSTANCE.holdThresholdMs = loaded.holdThresholdMs;
+                INSTANCE.soundEnabled = loaded.soundEnabled;
+                INSTANCE.debug = loaded.debug;
+                INSTANCE.mouseReposition = loaded.mouseReposition;
+                INSTANCE.guiSwapEnabled = loaded.guiSwapEnabled;
+                LOGGER.info("[SusInstantSwap] 配置已加载: longPressMode={}, holdThresholdMs={}, soundEnabled={}, debug={}, mouseReposition={}, guiSwapEnabled={}",
+                        INSTANCE.longPressMode, INSTANCE.holdThresholdMs, INSTANCE.soundEnabled, INSTANCE.debug, INSTANCE.mouseReposition, INSTANCE.guiSwapEnabled);
             } catch (Exception e) {
                 LOGGER.warn("[SusInstantSwap] 配置加载失败，使用默认值: {}", e.getMessage());
             }
