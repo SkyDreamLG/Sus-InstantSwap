@@ -179,7 +179,7 @@ public class InstantSwapClient {
         if (alreadyOnInventory) {
             // 物品栏已打开 → 关闭（除非与 E 键冲突）
             if (!isVanillaInventoryKey()) {
-                mc.setScreen(null);
+                mc.player.closeContainer();
             }
             debugLog("按键按下→关闭物品栏");
             return;
