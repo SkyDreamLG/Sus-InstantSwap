@@ -267,22 +267,25 @@ public class InstantSwapClient {
     }
 
     /**
-     * 模拟原版物品栏键（E键）行为。
+     * 模拟原版物品栏键（E键）行为——关闭/返回当前屏幕。
      * <p>
-     * 先让当前屏幕处理按键（如 EMI 配方界面会在此关闭自己并返回物品栏），
-     * 如果屏幕未消费按键，则关闭容器/物品栏。
-     * 此方法与 vanilla 中按下物品栏键的行为完全一致。
-     */
-    /**
-     * 模拟原版物品栏键（E键）行为。
-     * <p>
-     * 先让当前屏幕自行清理（EMI 配方界面会在 removed() 中恢复物品栏父界面），
-     * 如果屏幕未被替换，则强制关闭。
+     * ① 先发送 ESC 键给屏幕处理（EMI 配方界面会在 keyPressed(ESC) 中关闭自己并恢复物品栏）。
+     * ② 如果屏幕被替换（EMI 恢复了物品栏），直接返回。
+     * ③ 否则强制关闭：容器用 closeContainer()，其他屏幕用 setScreen(null)。
      */
     private static void simulateVanillaInventoryKey(Minecraft mc) {
+        // ① 让屏幕自行处理 ESC 键
         Screen prevScreen = mc.screen;
-        prevScreen.removed();
-        if (mc.screen == prevScreen) {
+        mc.screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+
+        // ② 屏幕已被替换（EMI 恢复了物品栏等）→ 完成
+        if (mc.screen != prevScreen) {
+            return;
+        }
+
+        // ③ 关闭容器/物品栏，对于非容器屏幕强制关闭
+        mc.player.closeContainer();
+        if (mc.screen != null) {
             mc.setScreen(null);
         }
     }
