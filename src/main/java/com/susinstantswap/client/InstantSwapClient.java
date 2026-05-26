@@ -182,8 +182,9 @@ public class InstantSwapClient {
         if (SwapConfig.guiSwapEnabledRuntime && SWAP_IN_GUI_KEY.isUnbound()
                 && mc.screen instanceof AbstractContainerScreen) {
             if (performGuiSwap(mc, creative)) {
-                debugLog("GUI 交换完成（跟随即时键）");
+                debugLog("GUI 交换完成（跟随即时键）+ 关闭界面");
                 state = SwapState.IDLE;
+                mc.player.closeContainer();
                 return;
             }
         }
@@ -191,30 +192,14 @@ public class InstantSwapClient {
         if (state != SwapState.IDLE) return;
         if (!canInteract(mc)) return;
 
-        boolean alreadyOnInventory = isInventoryScreen(mc.screen);
-
-        if (alreadyOnInventory) {
-            if (!isVanillaInventoryKey()) {
-                mc.player.closeContainer();
-            }
-            debugLog("按键按下 → 关闭物品栏");
-            return;
-        }
-
-        if (mc.screen instanceof AbstractContainerScreen) {
-            mc.player.closeContainer();
-            debugLog("按键按下 → 关闭容器界面");
-            return;
-        }
-
-        // 非容器界面（模组界面等）→ 模拟原版E键关闭行为
-        // 排除不应被关闭的界面（聊天、暂停等）
+        // 有界面打开 → 模拟原版物品栏键（E键）行为
         if (mc.screen != null) {
+            // 排除聊天和暂停界面（不应被干扰）
             if (mc.screen instanceof ChatScreen || mc.screen.isPauseScreen()) {
                 return;
             }
-            mc.setScreen(null);
-            debugLog("按键按下 → 关闭非容器界面");
+            simulateVanillaInventoryKey(mc);
+            debugLog("按键按下 → 模拟原版E键");
             return;
         }
 
@@ -297,6 +282,19 @@ public class InstantSwapClient {
         Minecraft mc = Minecraft.getInstance();
         if (mc.options == null) return false;
         return SWAP_KEY.same(mc.options.keyInventory);
+    }
+
+    /**
+     * 模拟原版物品栏键（E键）行为。
+     * 先让当前屏幕处理按键（如 EMI 配方界面会在此关闭自己并返回物品栏），
+     * 如果屏幕未消费按键，则关闭容器/物品栏。
+     */
+    private static void simulateVanillaInventoryKey(Minecraft mc) {
+        InputConstants.Key invKey = mc.options.keyInventory.getKey();
+        boolean handled = mc.screen.keyPressed(invKey.getValue(), 0, 0);
+        if (!handled) {
+            mc.player.closeContainer();
+        }
     }
 
     private static boolean canInteract(Minecraft mc) {
