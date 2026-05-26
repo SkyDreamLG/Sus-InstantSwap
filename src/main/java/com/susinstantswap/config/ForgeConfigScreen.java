@@ -67,6 +67,13 @@ public class ForgeConfigScreen extends Screen {
                 v -> SwapConfig.mouseRepositionRuntime = v));
         y += SPACING;
 
+        // ── 界面中更换开关 ──
+        addRenderableWidget(createToggle(centerX, y,
+                "config.susinstantswap.guiSwapEnabled",
+                SwapConfig.guiSwapEnabledRuntime,
+                v -> SwapConfig.guiSwapEnabledRuntime = v));
+        y += SPACING;
+
         // ── 调试日志开关 ──
         addRenderableWidget(createToggle(centerX, y,
                 "config.susinstantswap.debug",
@@ -139,6 +146,9 @@ public class ForgeConfigScreen extends Screen {
                 "",
                 "# Mouse Reposition — auto-move cursor to bottom-right when inventory opens",
                 "mouseReposition = " + SwapConfig.mouseRepositionRuntime,
+                "",
+                "# GUI Swap — swap and close screen when pressing swap key in inventory",
+                "guiSwapEnabled = " + SwapConfig.guiSwapEnabledRuntime,
                 "",
                 "# Debug Logging — print detailed swap info to game log",
                 "debug = " + SwapConfig.debugRuntime,

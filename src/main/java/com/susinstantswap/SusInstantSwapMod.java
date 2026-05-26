@@ -32,7 +32,7 @@ public class SusInstantSwapMod {
     public static ForgeConfigSpec CONFIG_SPEC;
 
     public SusInstantSwapMod() {
-        LOGGER.info("[SusInstantSwap] v1.1.1-Forge1.20.1 — loading started");
+        LOGGER.info("[SusInstantSwap] v1.2.0-Forge1.20.1 — loading started");
 
         // ── 步骤1：构建配置 ──
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -56,10 +56,10 @@ public class SusInstantSwapMod {
         FMLJavaModLoadingContext.get().getModEventBus().register(this);
 
         // ── 步骤5：FORGE event bus — 注册 tick / tooltip 事件（InstantSwapClient）──
-        InstantSwapClient.init(CONFIG);
+        InstantSwapClient.init();
         LOGGER.info("[SusInstantSwap] Client logic initialized");
 
-        LOGGER.info("[SusInstantSwap] v1.1.1-Forge1.20.1 — loaded");
+        LOGGER.info("[SusInstantSwap] v1.2.0-Forge1.20.1 — loaded");
     }
 
     /**

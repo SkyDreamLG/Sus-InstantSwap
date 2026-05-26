@@ -18,6 +18,7 @@ public class SwapConfig {
     public final ForgeConfigSpec.IntValue holdThresholdMs;
     public final ForgeConfigSpec.BooleanValue soundEnabled;
     public final ForgeConfigSpec.BooleanValue mouseReposition;
+    public final ForgeConfigSpec.BooleanValue guiSwapEnabled;
     public final ForgeConfigSpec.BooleanValue debug;
 
     // ═══════════ Runtime 层（即时可变，游戏内修改立即生效）═══════════
@@ -25,6 +26,7 @@ public class SwapConfig {
     public static int holdThresholdMsRuntime = 200;
     public static boolean soundEnabledRuntime = true;
     public static boolean mouseRepositionRuntime = true;
+    public static boolean guiSwapEnabledRuntime = false;
     public static boolean debugRuntime = false;
 
     public SwapConfig(ForgeConfigSpec.Builder builder) {
@@ -55,6 +57,12 @@ public class SwapConfig {
                         "Mouse Reposition — auto-move cursor to bottom-right when inventory opens")
                 .define("mouseReposition", true);
 
+        guiSwapEnabled = builder
+                .comment("",
+                        "GUI Swap — when enabled, press the swap key while hovering over an item",
+                        "in an inventory/container screen to swap and close the screen immediately")
+                .define("guiSwapEnabled", false);
+
         debug = builder
                 .comment("",
                         "Debug Logging — print detailed swap info to game log")
@@ -69,6 +77,7 @@ public class SwapConfig {
         holdThresholdMsRuntime = holdThresholdMs.get();
         soundEnabledRuntime = soundEnabled.get();
         mouseRepositionRuntime = mouseReposition.get();
+        guiSwapEnabledRuntime = guiSwapEnabled.get();
         debugRuntime = debug.get();
     }
 }
