@@ -286,14 +286,14 @@ public class InstantSwapClient {
 
     /**
      * 模拟原版物品栏键（E键）行为。
-     * 先让当前屏幕处理按键（如 EMI 配方界面会在此关闭自己并返回物品栏），
-     * 如果屏幕未消费按键，则关闭容器/物品栏。
+     * 先让当前屏幕自行清理（EMI 配方界面会在 removed() 中恢复物品栏父界面），
+     * 如果屏幕未被替换，则强制关闭。
      */
     private static void simulateVanillaInventoryKey(Minecraft mc) {
-        InputConstants.Key invKey = mc.options.keyInventory.getKey();
-        boolean handled = mc.screen.keyPressed(invKey.getValue(), 0, 0);
-        if (!handled) {
-            mc.player.closeContainer();
+        Screen prevScreen = mc.screen;
+        prevScreen.removed();
+        if (mc.screen == prevScreen) {
+            mc.setScreen(null);
         }
     }
 
