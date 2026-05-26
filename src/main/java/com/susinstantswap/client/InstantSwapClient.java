@@ -291,8 +291,12 @@ public class InstantSwapClient {
      */
     private static void simulateVanillaInventoryKey(Minecraft mc) {
         Screen prevScreen = mc.screen;
-        prevScreen.removed();
-        if (mc.screen == prevScreen) {
+        mc.screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+        if (mc.screen != prevScreen) {
+            return;
+        }
+        mc.player.closeContainer();
+        if (mc.screen != null) {
             mc.setScreen(null);
         }
     }
