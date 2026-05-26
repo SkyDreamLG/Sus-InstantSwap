@@ -274,20 +274,17 @@ public class InstantSwapClient {
      * ③ 否则强制关闭：容器用 closeContainer()，其他屏幕用 setScreen(null)。
      */
     private static void simulateVanillaInventoryKey(Minecraft mc) {
-        // ① 让屏幕自行处理 ESC 键
+        // ① 发送 ESC 键：EMI 配方界面在 keyPressed(ESC) 中恢复物品栏
         Screen prevScreen = mc.screen;
         mc.screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
 
-        // ② 屏幕已被替换（EMI 恢复了物品栏等）→ 完成
+        // ② 屏幕已被替换（EMI 恢复了物品栏）→ 完成
         if (mc.screen != prevScreen) {
             return;
         }
 
-        // ③ 关闭容器/物品栏，对于非容器屏幕强制关闭
-        mc.player.closeContainer();
-        if (mc.screen != null) {
-            mc.setScreen(null);
-        }
+        // ③ 直接强制关闭（和原版 ESC 键最终效果一致）
+        mc.setScreen(null);
     }
 
     // ── 界面中更换 ──
