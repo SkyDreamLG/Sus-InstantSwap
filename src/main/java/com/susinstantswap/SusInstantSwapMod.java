@@ -38,12 +38,15 @@ public class SusInstantSwapMod {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
         CONFIG = new SwapConfig(builder);
         CONFIG_SPEC = builder.build();
-        CONFIG.syncToRuntime();  // 将 ForgeConfigSpec 值同步到 Runtime 层
-        LOGGER.info("[SusInstantSwap] Config built & synced to Runtime");
+        LOGGER.info("[SusInstantSwap] Config built");
 
-        // ── 步骤2：注册配置 ──
+        // ── 步骤2：注册配置（Forge 会自动从文件加载，更新 CONFIG_SPEC）──
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, CONFIG_SPEC);
         LOGGER.info("[SusInstantSwap] Config registered (CLIENT type)");
+
+        // ── 步骤3：同步到 Runtime（在 registerConfig 之后调用，确保读取到文件值）──
+        CONFIG.syncToRuntime();
+        LOGGER.info("[SusInstantSwap] Config synced to Runtime");
 
         // ── 步骤3：注册配置界面 ──
         ModLoadingContext.get().registerExtensionPoint(

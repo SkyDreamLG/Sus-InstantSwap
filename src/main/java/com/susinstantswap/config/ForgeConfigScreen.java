@@ -7,20 +7,12 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.common.ForgeConfigSpec;
-import net.minecraftforge.fml.loading.FMLPaths;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.util.List;
 
 /**
  * Forge 原生配置界面（零外部依赖，仅 MC 组件）。
  *
  * 运行时配置修改通过 SwapConfig.Runtime 静态字段即时生效，
- * 同时写入 TOML 文件保证重启后持久化。
+ * 保存时同步回 ForgeConfigSpec 并用 spec.save() 写入正确格式的 TOML。
  */
 public class ForgeConfigScreen extends Screen {
 
@@ -115,45 +107,17 @@ public class ForgeConfigScreen extends Screen {
     }
 
     /**
-     * 保存当前 Runtime 值到 TOML 文件（用于重启持久化）。
-     * Runtime 值已被即时修改，无需额外同步。
+     * 保存当前 Runtime 值到 ForgeConfigSpec 并写入 TOML 文件（用于重启持久化）。
+     * 使用 spec.save() 确保 TOML 格式与 ForgeConfigSpec 读取器兼容。
      */
     private void saveAndClose() {
-        Path configFile = FMLPaths.CONFIGDIR.get().resolve("susinstantswap-client.toml");
-        try {
-            Files.createDirectories(configFile.getParent());
-            Files.write(configFile, toTomlContent(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-        } catch (IOException ignored) {
-        }
-        onClose();
-    }
+        // 1. 同步 Runtime → ForgeConfigSpec（双向同步）
+        SusInstantSwapMod.CONFIG.syncToSpec();
 
-    private List<String> toTomlContent() {
-        return List.of(
-                "# Su's Instant Swap Configuration",
-                "# Changes take effect immediately — no restart needed.",
-                "",
-                "# Long/Short Press Mode",
-                "#   true  = Short press toggles inventory, long press swaps (default)",
-                "#   false = Classic mode (hold to open, release to swap)",
-                "longPressMode = " + SwapConfig.longPressModeRuntime,
-                "",
-                "# Long Press Threshold (ms). Range: 50 ~ 1000",
-                "holdThresholdMs = " + SwapConfig.holdThresholdMsRuntime,
-                "",
-                "# Swap Sound — play item pickup sound on swap",
-                "soundEnabled = " + SwapConfig.soundEnabledRuntime,
-                "",
-                "# Mouse Reposition — auto-move cursor to bottom-right when inventory opens",
-                "mouseReposition = " + SwapConfig.mouseRepositionRuntime,
-                "",
-                "# GUI Swap — swap and close screen when pressing swap key in inventory",
-                "guiSwapEnabled = " + SwapConfig.guiSwapEnabledRuntime,
-                "",
-                "# Debug Logging — print detailed swap info to game log",
-                "debug = " + SwapConfig.debugRuntime,
-                ""
-        );
+        // 2. 通过 ForgeConfigSpec.save() 写入正确格式的 TOML
+        SusInstantSwapMod.CONFIG_SPEC.save();
+
+        onClose();
     }
 
     @Override
