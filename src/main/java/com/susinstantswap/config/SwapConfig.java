@@ -14,8 +14,9 @@ public class SwapConfig {
     public final ModConfigSpec.BooleanValue longPressMode;
     public final ModConfigSpec.IntValue holdThresholdMs;
     public final ModConfigSpec.BooleanValue soundEnabled;
-    public final ModConfigSpec.BooleanValue debug;
     public final ModConfigSpec.BooleanValue mouseReposition;
+    public final ModConfigSpec.BooleanValue guiSwapEnabled;
+    public final ModConfigSpec.BooleanValue debug;
     public SwapConfig(ModConfigSpec.Builder builder) {
         builder.comment("Su's Instant Swap Configuration",
                 "",
@@ -55,6 +56,19 @@ public class SwapConfig {
                 .comment("", "Mouse Reposition",
                         "Automatically move cursor to bottom-right when inventory opens")
                 .define("mouseReposition", true);
+
+        // -----------------------------
+        //  GUI Swap
+        // -----------------------------
+        guiSwapEnabled = builder
+                .translation("config.susinstantswap.guiSwapEnabled")
+                .comment("", "GUI Swap",
+                        "When enabled, pressing the swap key while hovering",
+                        "over an item in any inventory/container screen",
+                        "will swap the item and close the screen.",
+                        "Can use a dedicated key binding (Swap in GUI) or",
+                        "follow the Instant Swap key.")
+                .define("guiSwapEnabled", false);
 
         // -----------------------------
         //  Debug

@@ -27,7 +27,7 @@ public class SusInstantSwapMod {
     public static ModConfigSpec CONFIG_SPEC;
 
     public SusInstantSwapMod(IEventBus modEventBus, ModContainer modContainer) {
-        LOGGER.info("[SusInstantSwap] v1.1.1 — constructor called (loading started)");
+        LOGGER.info("[SusInstantSwap] v1.2.0 — constructor called (loading started)");
 
         // 构建配置
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -48,7 +48,7 @@ public class SusInstantSwapMod {
         InstantSwapClient.init(CONFIG);
         LOGGER.info("[SusInstantSwap] Client logic initialized");
 
-        LOGGER.info("[SusInstantSwap] v1.1.1 — mod loaded");
+        LOGGER.info("[SusInstantSwap] v1.2.0 — mod loaded");
     }
 
     /**
