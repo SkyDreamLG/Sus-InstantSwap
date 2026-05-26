@@ -7,6 +7,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -194,13 +195,19 @@ public class InstantSwapClient {
                 }
 
                 // 容器界面（箱子、木桶、工作台等）→ 关闭之（模拟原版 E 键行为）
-                // 非容器界面（聊天栏、模组菜单、暂停等）→ 不响应，避免干扰打字
                 if (mc.screen instanceof AbstractContainerScreen) {
                     mc.player.closeContainer();
-                    debugLog("KeyEvent: 关闭容器界面（模拟原版E键）");
+                    debugLog("KeyEvent: 关闭容器界面");
                     return;
                 }
+                // 非容器界面（模组界面等）→ 模拟原版E键关闭行为
+                // 排除不应被关闭的界面（聊天、暂停等）
                 if (mc.screen != null) {
+                    if (mc.screen instanceof ChatScreen || mc.screen.isPauseScreen()) {
+                        return;
+                    }
+                    mc.setScreen(null);
+                    debugLog("KeyEvent: 关闭非容器界面");
                     return;
                 }
 
