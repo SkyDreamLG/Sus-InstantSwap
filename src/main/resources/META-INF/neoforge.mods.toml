@@ -8,11 +8,18 @@ version="1.2.0"
 displayName="Su's Instant Swap"
 logoFile="susinstantswap/icon.png"
 authors="Su_Crispy"
-description="Hold a key to open your inventory; release over a slot to instantly swap it with your hotbar selection. Supports long/short press dual modes, survival/creative/adventure game modes."
+description="Hold a key to open your inventory; release over a slot to instantly swap it with your hotbar selection. Supports long/short press dual modes, GUI swap, survival/creative/adventure game modes."
 
 [[dependencies.susinstantswap]]
 modId="neoforge"
 type="required"
-versionRange="[21.0,21.2)"
+versionRange="[26.1,26.2)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.susinstantswap]]
+modId="minecraft"
+type="required"
+versionRange="[26.1,26.2)"
 ordering="NONE"
 side="CLIENT"

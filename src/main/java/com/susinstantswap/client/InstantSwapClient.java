@@ -10,10 +10,10 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.network.HashedStack;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
@@ -23,12 +23,15 @@ import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderTooltipEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
 public class InstantSwapClient {
 
     private static final Logger LOGGER = LogUtils.getLogger();
+    private static final KeyMapping.Category SWAP_CATEGORY =
+            KeyMapping.Category.register(Identifier.fromNamespaceAndPath("susinstantswap", "main"));
     private static KeyMapping SWAP_KEY;
     private static KeyMapping SWAP_IN_GUI_KEY;
     private static SwapConfig config;
@@ -52,10 +55,10 @@ public class InstantSwapClient {
         config = cfg;
         SWAP_KEY = new KeyMapping("key.susinstantswap.swap",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT,
-                "key.categories.susinstantswap");
+                SWAP_CATEGORY);
         SWAP_IN_GUI_KEY = new KeyMapping("key.susinstantswap.swap_in_gui",
                 InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(),
-                "key.categories.susinstantswap");
+                SWAP_CATEGORY);
         NeoForge.EVENT_BUS.register(InstantSwapClient.class);
     }
 
@@ -98,7 +101,7 @@ public class InstantSwapClient {
             state = SwapState.IDLE;
         }
 
-        boolean creative = mc.gameMode.hasInfiniteItems();
+        boolean creative = mc.gameMode.getPlayerMode().isCreative();
 
         // ── OPEN 状态：长按确认 + 释放丢失兜底 ──
         if (state == SwapState.OPEN) {
@@ -145,7 +148,7 @@ public class InstantSwapClient {
         if (action != GLFW.GLFW_PRESS && action != GLFW.GLFW_RELEASE) return;
 
         boolean keyDown = (action == GLFW.GLFW_PRESS);
-        boolean creative = mc.gameMode.hasInfiniteItems();
+        boolean creative = mc.gameMode.getPlayerMode().isCreative();
 
         // ── 检测哪个按键被触发 ──
         boolean isSwapKey = isSwapKeyEvent(event);
@@ -189,7 +192,7 @@ public class InstantSwapClient {
                 // 物品栏已打开：按键只关闭物品栏，不进入交换流程
                 if (alreadyOnInventory) {
                     if (!isVanillaInventoryKey()) {
-                        mc.setScreen(null);
+                        mc.player.closeContainer();
                     }
                     debugLog("KeyEvent: 物品栏已打开 → 关闭物品栏");
                     return;
@@ -252,7 +255,7 @@ public class InstantSwapClient {
         Minecraft mc = Minecraft.getInstance();
         InputConstants.Key boundKey = SWAP_KEY.getKey();
         if (boundKey.getType() != InputConstants.Type.KEYSYM) return false;
-        return GLFW.glfwGetKey(mc.getWindow().getWindow(), boundKey.getValue()) == GLFW.GLFW_PRESS;
+        return GLFW.glfwGetKey(mc.getWindow().handle(), boundKey.getValue()) == GLFW.GLFW_PRESS;
     }
 
     /** 判断按键事件是否匹配 SWAP_KEY */
@@ -290,7 +293,7 @@ public class InstantSwapClient {
         }
 
         int hoveredIndex = hoveredSlot.index;
-        int selectedHotbar = mc.player.getInventory().selected;
+        int selectedHotbar = mc.player.getInventory().getSelectedSlot();
 
         // ── 创造模式物品栏 ──
         if (screen instanceof CreativeModeInventoryScreen) {
@@ -324,19 +327,27 @@ public class InstantSwapClient {
     }
 
     /**
-     * 发送 ClickType.SWAP 数据包，将悬停槽位与热键栏槽位交换。
+     * 发送 ContainerInput.SWAP 数据包，将悬停槽位与热键栏槽位交换。
      * 使用 screen.getMenu() 获取菜单信息，兼容玩家物品栏和创造模式物品栏。
      */
     private static boolean performGuiContainerSwap(AbstractContainerScreen<?> screen, int hoveredIndex, int selectedHotbar) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.getConnection() == null) return false;
 
+        int hotbarMenuSlot = selectedHotbar + 36;
+
+        // 客户端预测：立即交换物品（保证显示即时更新）
+        ItemStack hoveredItem = screen.getMenu().getSlot(hoveredIndex).getItem().copy();
+        ItemStack hotbarItem = screen.getMenu().getSlot(hotbarMenuSlot).getItem().copy();
+        screen.getMenu().getSlot(hoveredIndex).set(hotbarItem);
+        screen.getMenu().getSlot(hotbarMenuSlot).set(hoveredItem);
+
         int containerId = screen.getMenu().containerId;
         int stateId = screen.getMenu().getStateId();
-        Int2ObjectOpenHashMap<ItemStack> changedSlots = new Int2ObjectOpenHashMap<>();
+        Int2ObjectOpenHashMap<HashedStack> changedSlots = new Int2ObjectOpenHashMap<>();
         ServerboundContainerClickPacket packet = new ServerboundContainerClickPacket(
-                containerId, stateId, hoveredIndex, selectedHotbar,
-                ClickType.SWAP, ItemStack.EMPTY, changedSlots);
+                containerId, stateId, (byte) hoveredIndex, (byte) selectedHotbar,
+                ContainerInput.SWAP, changedSlots, HashedStack.EMPTY);
         mc.getConnection().send(packet);
         return true;
     }
@@ -348,7 +359,7 @@ public class InstantSwapClient {
         Slot hoveredSlot = creativeScreen.getSlotUnderMouse();
         if (hoveredSlot == null || !hoveredSlot.hasItem()) return false;
 
-        int selected = mc.player.getInventory().selected;
+        int selected = mc.player.getInventory().getSelectedSlot();
         int heldSlotIndex = selected + 36;
 
         if (hoveredSlot.container == CreativeModeInventoryScreen.CONTAINER) {
@@ -359,9 +370,11 @@ public class InstantSwapClient {
             if (!heldItem.isEmpty()) {
                 int freeBackpackSlot = findFreeBackpackSlot(mc);
                 if (freeBackpackSlot >= 0) {
+                    mc.player.inventoryMenu.getSlot(freeBackpackSlot).set(heldItem);
                     mc.gameMode.handleCreativeModeItemAdd(heldItem, freeBackpackSlot);
                 }
             }
+            mc.player.inventoryMenu.getSlot(heldSlotIndex).set(item);
             mc.gameMode.handleCreativeModeItemAdd(item, heldSlotIndex);
             return true;
         }
@@ -372,6 +385,9 @@ public class InstantSwapClient {
                 // 使用 screen 的菜单读取槽位物品（screen.getMenu() 即为当前显示的容器菜单）
                 ItemStack targetItem = creativeScreen.getMenu().getSlot(targetMenuSlot).getItem().copy();
                 ItemStack heldItem = creativeScreen.getMenu().getSlot(heldSlotIndex).getItem().copy();
+                // 客户端预测：先更新本地物品栏，再发数据包
+                creativeScreen.getMenu().getSlot(heldSlotIndex).set(targetItem);
+                creativeScreen.getMenu().getSlot(targetMenuSlot).set(heldItem);
                 mc.gameMode.handleCreativeModeItemAdd(targetItem, heldSlotIndex);
                 mc.gameMode.handleCreativeModeItemAdd(heldItem, targetMenuSlot);
                 return true;
@@ -385,6 +401,9 @@ public class InstantSwapClient {
             int hotbarMenuSlot = containerSlot + 36;
             ItemStack hotbarItem = mc.player.getInventory().getItem(containerSlot).copy();
             ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
+            // 客户端预测：先更新本地物品栏，再发数据包
+            mc.player.inventoryMenu.getSlot(heldSlotIndex).set(hotbarItem);
+            mc.player.inventoryMenu.getSlot(hotbarMenuSlot).set(heldItem);
             mc.gameMode.handleCreativeModeItemAdd(hotbarItem, heldSlotIndex);
             mc.gameMode.handleCreativeModeItemAdd(heldItem, hotbarMenuSlot);
             return true;
@@ -442,7 +461,7 @@ public class InstantSwapClient {
      */
     private static void preMoveCursorToWindowCorner(Minecraft mc) {
         if (!config.mouseReposition.get()) return;
-        long handle = mc.getWindow().getWindow();
+        long handle = mc.getWindow().handle();
         int width = mc.getWindow().getWidth();
         int height = mc.getWindow().getHeight();
         GLFW.glfwSetCursorPos(handle, width - 10, height - 10);
@@ -457,14 +476,14 @@ public class InstantSwapClient {
     /** 移动鼠标光标到物品栏 UI 右下角，并清除悬停槽位防止 tooltip 闪烁 */
     private static void positionCursorToUIBottomRight(Minecraft mc, Screen screen) {
         if (!(screen instanceof AbstractContainerScreen<?> containerScreen)) {
-            long handle = mc.getWindow().getWindow();
+            long handle = mc.getWindow().handle();
             int width = mc.getWindow().getWidth();
             int height = mc.getWindow().getHeight();
             GLFW.glfwSetCursorPos(handle, width - 10, height - 10);
             return;
         }
 
-        long handle = mc.getWindow().getWindow();
+        long handle = mc.getWindow().handle();
         double guiScale = mc.getWindow().getGuiScale();
 
         int guiRight = containerScreen.getGuiLeft() + containerScreen.getXSize();
@@ -510,7 +529,7 @@ public class InstantSwapClient {
         }
 
         int hoveredIndex = hoveredSlot.index;
-        int selectedHotbar = mc.player.getInventory().selected;
+        int selectedHotbar = mc.player.getInventory().getSelectedSlot();
         int hotbarMenuSlot = selectedHotbar + 36;
 
         if (!isAllowedMenuSlot(hoveredIndex) || hoveredIndex == hotbarMenuSlot) {
@@ -519,12 +538,18 @@ public class InstantSwapClient {
             return;
         }
 
+        // 客户端预测：读取交换前的物品，立即在客户端交换（保证显示即时更新）
+        ItemStack hoveredItem = mc.player.inventoryMenu.getSlot(hoveredIndex).getItem().copy();
+        ItemStack hotbarItem = mc.player.inventoryMenu.getSlot(hotbarMenuSlot).getItem().copy();
+        mc.player.inventoryMenu.getSlot(hoveredIndex).set(hotbarItem);
+        mc.player.inventoryMenu.getSlot(hotbarMenuSlot).set(hoveredItem);
+
         int containerId = mc.player.inventoryMenu.containerId;
         int stateId = mc.player.inventoryMenu.getStateId();
-        Int2ObjectOpenHashMap<ItemStack> changedSlots = new Int2ObjectOpenHashMap<>();
+        Int2ObjectOpenHashMap<HashedStack> changedSlots = new Int2ObjectOpenHashMap<>();
         ServerboundContainerClickPacket packet = new ServerboundContainerClickPacket(
-                containerId, stateId, hoveredIndex, selectedHotbar,
-                ClickType.SWAP, ItemStack.EMPTY, changedSlots);
+                containerId, stateId, (byte) hoveredIndex, (byte) selectedHotbar,
+                ContainerInput.SWAP, changedSlots, HashedStack.EMPTY);
         if (mc.getConnection() == null) {
             LOGGER.warn("[SusInstantSwap] 生存模式交换失败: 连接为null");
             return;
@@ -556,7 +581,7 @@ public class InstantSwapClient {
             return;
         }
 
-        int selected = mc.player.getInventory().selected;
+        int selected = mc.player.getInventory().getSelectedSlot();
         int heldSlotIndex = selected + 36;
         boolean didSwap = false;
 
@@ -568,6 +593,8 @@ public class InstantSwapClient {
             if (!heldItem.isEmpty()) {
                 int freeBackpackSlot = findFreeBackpackSlot(mc);
                 if (freeBackpackSlot >= 0) {
+                    // 客户端预测：先更新本地物品栏，再发数据包
+                    mc.player.inventoryMenu.getSlot(freeBackpackSlot).set(heldItem);
                     mc.gameMode.handleCreativeModeItemAdd(heldItem, freeBackpackSlot);
                     LOGGER.info("[SusInstantSwap] 创造模式: 手持物品已移入背包槽位{}", freeBackpackSlot);
                 } else {
@@ -575,6 +602,8 @@ public class InstantSwapClient {
                 }
             }
 
+            // 客户端预测：先更新本地物品栏，再发数据包
+            mc.player.inventoryMenu.getSlot(heldSlotIndex).set(item);
             mc.gameMode.handleCreativeModeItemAdd(item, heldSlotIndex);
             didSwap = true;
             LOGGER.info("[SusInstantSwap] 创造模式交换: 从创造物品栏拿取物品到快捷栏{}", selected);
@@ -584,6 +613,9 @@ public class InstantSwapClient {
             if (isAllowedMenuSlot(targetMenuSlot) && targetMenuSlot != heldSlotIndex) {
                 ItemStack targetItem = mc.player.inventoryMenu.getSlot(targetMenuSlot).getItem().copy();
                 ItemStack heldItem = mc.player.inventoryMenu.getSlot(heldSlotIndex).getItem().copy();
+                // 客户端预测：先更新本地物品栏，再发数据包
+                mc.player.inventoryMenu.getSlot(heldSlotIndex).set(targetItem);
+                mc.player.inventoryMenu.getSlot(targetMenuSlot).set(heldItem);
                 mc.gameMode.handleCreativeModeItemAdd(targetItem, heldSlotIndex);
                 mc.gameMode.handleCreativeModeItemAdd(heldItem, targetMenuSlot);
                 didSwap = true;
@@ -597,6 +629,9 @@ public class InstantSwapClient {
                 if (hotbarMenuSlot != heldSlotIndex) {
                     ItemStack hotbarItem = mc.player.getInventory().getItem(containerSlot).copy();
                     ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
+                    // 客户端预测：先更新本地物品栏，再发数据包
+                    mc.player.inventoryMenu.getSlot(heldSlotIndex).set(hotbarItem);
+                    mc.player.inventoryMenu.getSlot(hotbarMenuSlot).set(heldItem);
                     mc.gameMode.handleCreativeModeItemAdd(hotbarItem, heldSlotIndex);
                     mc.gameMode.handleCreativeModeItemAdd(heldItem, hotbarMenuSlot);
                     didSwap = true;
@@ -630,7 +665,7 @@ public class InstantSwapClient {
 
     private static void playSwapSound(Minecraft mc) {
         if (!config.soundEnabled.get() || mc.player == null) return;
-        mc.player.playNotifySound(SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.8f, 1.0f);
+        mc.player.playSound(SoundEvents.ITEM_PICKUP, 0.8f, 1.0f);
     }
 
     // ── 调试日志 ──

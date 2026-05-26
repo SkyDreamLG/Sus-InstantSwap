@@ -56,7 +56,7 @@ public class SusInstantSwapMod {
      */
     private void registerConfigScreen(ModContainer modContainer) {
         // 确保只在客户端注册（虽然类已经是 Dist.CLIENT，但这是个好习惯）
-        if (FMLEnvironment.dist == Dist.CLIENT) {
+        if (FMLEnvironment.getDist() == Dist.CLIENT) {
             modContainer.registerExtensionPoint(IConfigScreenFactory.class,
                     (modContainer1, screen) -> new ConfigurationScreen(modContainer1, screen));
             LOGGER.info("[SusInstantSwap] Config screen extension point registered");
