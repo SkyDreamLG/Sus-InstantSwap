@@ -164,6 +164,11 @@ public class InstantSwapClient {
                 if (performGuiSwap(mc, creative)) {
                     debugLog("KeyEvent: 界面中更换完成");
                     state = SwapState.IDLE;
+                    // SWAP_KEY 触发时：交换后关闭界面
+                    // SWAP_IN_GUI_KEY 触发时：仅交换不关闭
+                    if (isSwapKey) {
+                        mc.player.closeContainer();
+                    }
                     return;
                 }
             }
@@ -179,39 +184,21 @@ public class InstantSwapClient {
         if (!isSwapKeyEvent(event)) return;
 
         if (keyDown) {
-            // ── 按键按下：立即打开物品栏 ──
             if (!canInteract(mc)) return;
 
-            boolean alreadyOnInventory = isInventoryScreen(mc.screen);
-
             if (state == SwapState.IDLE) {
-                // 物品栏已打开：按键只关闭物品栏，不进入交换流程
-                if (alreadyOnInventory) {
-                    if (!isVanillaInventoryKey()) {
-                        mc.player.closeContainer();
-                    }
-                    debugLog("KeyEvent: 物品栏已打开 → 关闭物品栏");
-                    return;
-                }
-
-                // 容器界面（箱子、木桶、工作台等）→ 关闭之（模拟原版 E 键行为）
-                if (mc.screen instanceof AbstractContainerScreen) {
-                    mc.player.closeContainer();
-                    debugLog("KeyEvent: 关闭容器界面");
-                    return;
-                }
-                // 非容器界面（模组界面等）→ 模拟原版E键关闭行为
-                // 排除不应被关闭的界面（聊天、暂停等）
+                // 有界面打开 → 模拟原版物品栏键（E键）行为
                 if (mc.screen != null) {
+                    // 排除聊天和暂停界面（不应被干扰）
                     if (mc.screen instanceof ChatScreen || mc.screen.isPauseScreen()) {
                         return;
                     }
-                    mc.setScreen(null);
-                    debugLog("KeyEvent: 关闭非容器界面");
+                    simulateVanillaInventoryKey(mc);
+                    debugLog("KeyEvent: 模拟原版E键");
                     return;
                 }
 
-                // 立即打开物品栏（长短按模式均如此）
+                // 无界面 → 打开物品栏
                 openInventoryAndPositionCursor(mc, creative);
                 state = SwapState.OPEN;
                 pressStartTime = System.currentTimeMillis();
@@ -277,6 +264,21 @@ public class InstantSwapClient {
     /** 检查按键映射是否未指定（玩家在控制菜单中未绑定任何键） */
     private static boolean isKeyUnassigned(KeyMapping mapping) {
         return mapping.isUnbound();
+    }
+
+    /**
+     * 模拟原版物品栏键（E键）行为。
+     * <p>
+     * 先让当前屏幕处理按键（如 EMI 配方界面会在此关闭自己并返回物品栏），
+     * 如果屏幕未消费按键，则关闭容器/物品栏。
+     * 此方法与 vanilla 中按下物品栏键的行为完全一致。
+     */
+    private static void simulateVanillaInventoryKey(Minecraft mc) {
+        InputConstants.Key invKey = mc.options.keyInventory.getKey();
+        boolean handled = mc.screen.keyPressed(invKey.getValue(), 0, 0);
+        if (!handled) {
+            mc.player.closeContainer();
+        }
     }
 
     // ── 界面中更换 ──
