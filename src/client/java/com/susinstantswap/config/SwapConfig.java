@@ -26,6 +26,7 @@ public class SwapConfig {
     @Expose public boolean debug = false;
     @Expose public boolean mouseReposition = true;
     @Expose public boolean guiSwapEnabled = false;
+    @Expose public boolean emptySlotSwapEnabled = false;
 
     private static SwapConfig INSTANCE;
     private static Path configPath;
@@ -51,8 +52,9 @@ public class SwapConfig {
                 INSTANCE.debug = loaded.debug;
                 INSTANCE.mouseReposition = loaded.mouseReposition;
                 INSTANCE.guiSwapEnabled = loaded.guiSwapEnabled;
-                LOGGER.info("[SusInstantSwap] 配置已加载: longPressMode={}, holdThresholdMs={}, soundEnabled={}, debug={}, mouseReposition={}, guiSwapEnabled={}",
-                        INSTANCE.longPressMode, INSTANCE.holdThresholdMs, INSTANCE.soundEnabled, INSTANCE.debug, INSTANCE.mouseReposition, INSTANCE.guiSwapEnabled);
+                INSTANCE.emptySlotSwapEnabled = loaded.emptySlotSwapEnabled;
+                LOGGER.info("[SusInstantSwap] 配置已加载: longPressMode={}, holdThresholdMs={}, soundEnabled={}, debug={}, mouseReposition={}, guiSwapEnabled={}, emptySlotSwapEnabled={}",
+                        INSTANCE.longPressMode, INSTANCE.holdThresholdMs, INSTANCE.soundEnabled, INSTANCE.debug, INSTANCE.mouseReposition, INSTANCE.guiSwapEnabled, INSTANCE.emptySlotSwapEnabled);
             } catch (Exception e) {
                 LOGGER.warn("[SusInstantSwap] 配置加载失败，使用默认值: {}", e.getMessage());
             }
