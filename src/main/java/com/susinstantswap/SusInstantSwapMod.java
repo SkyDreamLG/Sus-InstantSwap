@@ -27,7 +27,7 @@ public class SusInstantSwapMod {
     public static ForgeConfigSpec CONFIG_SPEC;
 
     public SusInstantSwapMod(FMLJavaModLoadingContext context) {
-        LOGGER.info("[SusInstantSwap] v1.2.0-Forge26.1 — loading started");
+        LOGGER.info("[SusInstantSwap] v1.3.0-Forge26.1 — loading started");
 
         // ── 步骤1：构建配置 ──
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -57,6 +57,6 @@ public class SusInstantSwapMod {
         InstantSwapClient.init();
         LOGGER.info("[SusInstantSwap] Client logic initialized");
 
-        LOGGER.info("[SusInstantSwap] v1.2.0-Forge26.1 — loaded");
+        LOGGER.info("[SusInstantSwap] v1.3.0-Forge26.1 — loaded");
     }
 }
