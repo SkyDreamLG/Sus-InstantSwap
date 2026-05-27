@@ -19,6 +19,7 @@ public class SwapConfig {
     public final ForgeConfigSpec.BooleanValue soundEnabled;
     public final ForgeConfigSpec.BooleanValue mouseReposition;
     public final ForgeConfigSpec.BooleanValue guiSwapEnabled;
+    public final ForgeConfigSpec.BooleanValue emptySlotSwapEnabled;
     public final ForgeConfigSpec.BooleanValue debug;
 
     // ═══════════ Runtime 层（即时可变，游戏内修改立即生效）═══════════
@@ -27,6 +28,7 @@ public class SwapConfig {
     public static boolean soundEnabledRuntime = true;
     public static boolean mouseRepositionRuntime = true;
     public static boolean guiSwapEnabledRuntime = false;
+    public static boolean emptySlotSwapEnabledRuntime = false;
     public static boolean debugRuntime = false;
 
     public SwapConfig(ForgeConfigSpec.Builder builder) {
@@ -63,6 +65,12 @@ public class SwapConfig {
                         "in an inventory/container screen to swap and close the screen immediately")
                 .define("guiSwapEnabled", false);
 
+        emptySlotSwapEnabled = builder
+                .comment("",
+                        "Empty Slot Swap — when enabled, pressing the swap key on an empty slot",
+                        "will also perform the swap (move hotbar item to backpack)")
+                .define("emptySlotSwapEnabled", false);
+
         debug = builder
                 .comment("",
                         "Debug Logging — print detailed swap info to game log")
@@ -78,6 +86,7 @@ public class SwapConfig {
         soundEnabledRuntime = soundEnabled.get();
         mouseRepositionRuntime = mouseReposition.get();
         guiSwapEnabledRuntime = guiSwapEnabled.get();
+        emptySlotSwapEnabledRuntime = emptySlotSwapEnabled.get();
         debugRuntime = debug.get();
     }
 
@@ -90,6 +99,7 @@ public class SwapConfig {
         soundEnabled.set(soundEnabledRuntime);
         mouseReposition.set(mouseRepositionRuntime);
         guiSwapEnabled.set(guiSwapEnabledRuntime);
+        emptySlotSwapEnabled.set(emptySlotSwapEnabledRuntime);
         debug.set(debugRuntime);
     }
 }
