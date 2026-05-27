@@ -9,6 +9,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -195,7 +196,7 @@ public class InstantSwapClient {
         // 有界面打开 → 模拟原版物品栏键（E键）行为
         if (mc.screen != null) {
             // 排除聊天和暂停界面（不应被干扰）
-            if (mc.screen instanceof ChatScreen || mc.screen.isPauseScreen()) {
+            if (mc.screen instanceof ChatScreen || mc.screen instanceof PauseScreen) {
                 return;
             }
             simulateVanillaInventoryKey(mc);
