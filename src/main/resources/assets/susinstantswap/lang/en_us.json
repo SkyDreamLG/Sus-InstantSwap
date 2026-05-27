@@ -21,6 +21,9 @@
     "config.susinstantswap.guiSwapEnabled": "GUI Swap",
     "config.susinstantswap.guiSwapEnabled.tooltip": "Swap and close the screen when pressing swap key while hovering over an item in container.",
 
+    "config.susinstantswap.emptySlotSwapEnabled": "Empty Slot Swap",
+    "config.susinstantswap.emptySlotSwapEnabled.tooltip": "Allow swapping even when hovering over an empty slot in the inventory.",
+
     "config.susinstantswap.debug": "Debug Logging",
     "config.susinstantswap.debug.tooltip": "Output debug messages to the game log.",
 
