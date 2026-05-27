@@ -16,6 +16,7 @@ public class SwapConfig {
     public final ModConfigSpec.BooleanValue soundEnabled;
     public final ModConfigSpec.BooleanValue mouseReposition;
     public final ModConfigSpec.BooleanValue guiSwapEnabled;
+    public final ModConfigSpec.BooleanValue emptySlotSwapEnabled;
     public final ModConfigSpec.BooleanValue debug;
     public SwapConfig(ModConfigSpec.Builder builder) {
         builder.comment("Su's Instant Swap Configuration",
@@ -69,6 +70,17 @@ public class SwapConfig {
                         "Can use a dedicated key binding (Swap in GUI) or",
                         "follow the Instant Swap key.")
                 .define("guiSwapEnabled", false);
+
+        // -----------------------------
+        //  Empty Slot Swap
+        // -----------------------------
+        emptySlotSwapEnabled = builder
+                .translation("config.susinstantswap.emptySlotSwapEnabled")
+                .comment("", "Empty Slot Swap",
+                        "When enabled, pressing the swap key on an empty slot",
+                        "will also perform the swap (move hotbar item to backpack).",
+                        "Defaults to false.")
+                .define("emptySlotSwapEnabled", false);
 
         // -----------------------------
         //  Debug
