@@ -62,6 +62,7 @@ public class InstantSwapClient {
     private static int suppressTooltipFrames;
 
     private static boolean configLogged;
+    private static boolean inMenuContext = false;
 
     // ── 反射缓存 ──
     private static Field hoveredSlotField;
@@ -113,6 +114,14 @@ public class InstantSwapClient {
 
     private static void onClientTick(TickEvent.ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
+
+        if (mc.player == null) {
+            inMenuContext = false;
+        } else if (mc.screen instanceof PauseScreen) {
+            inMenuContext = true;
+        } else if (mc.screen == null) {
+            inMenuContext = false;
+        }
 
         // ── tooltip 抑制帧计数 ──
         if (suppressTooltipFrames > 0) {
@@ -199,11 +208,11 @@ public class InstantSwapClient {
 
         if (state != SwapState.IDLE) return;
         if (!canInteract(mc)) return;
+        if (mc.screen != null && isExcludedScreen(mc.screen)) { return; }
 
         // 有界面打开 → 模拟原版物品栏键（E键）行为
         if (mc.screen != null) {
-            // 排除聊天和暂停界面（不应被干扰）
-            if (mc.screen instanceof ChatScreen || mc.screen instanceof PauseScreen) {
+            if (isExcludedScreen(mc.screen)) {
                 return;
             }
             simulateVanillaInventoryKey(mc);
@@ -358,6 +367,11 @@ public class InstantSwapClient {
     // GUI 交换
     // ═══════════════════════════════════════════════════════════
 
+    private static boolean isExcludedScreen(Screen screen) {
+        if (screen instanceof ChatScreen) return true;
+        return inMenuContext;
+    }
+
     private static boolean performGuiSwap(Minecraft mc, boolean creative) {
         if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
 
@@ -453,6 +467,19 @@ public class InstantSwapClient {
                 mc.gameMode.handleCreativeModeItemAdd(heldItem, realIndex);
             }
             LOGGER.info("[SusInstantSwap] GUI交换(创造背包): {} <-> 快捷栏{}", realIndex, selected);
+            return true;
+        }
+
+        // 快捷栏内部交换：getContainerSlot() 返回 0-8（客户端预测先行）
+        int containerSlot = hovered.getContainerSlot();
+        if (containerSlot >= 0 && containerSlot <= 8 && containerSlot != selected) {
+            int hotbarMenuSlot = containerSlot + 36;
+            ItemStack hotbarItem = mc.player.getInventory().getItem(containerSlot).copy();
+            ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
+            mc.player.inventoryMenu.getSlot(heldSlotIndex).set(hotbarItem);
+            mc.player.inventoryMenu.getSlot(hotbarMenuSlot).set(heldItem);
+            mc.gameMode.handleCreativeModeItemAdd(hotbarItem, heldSlotIndex);
+            mc.gameMode.handleCreativeModeItemAdd(heldItem, hotbarMenuSlot);
             return true;
         }
 
@@ -649,6 +676,19 @@ public class InstantSwapClient {
             }
             didSwap = true;
             LOGGER.info("[SusInstantSwap] 创造交换(背包): {} <-> 快捷栏{}", realIndex, selected);
+        }
+
+        // 快捷栏内部交换：getContainerSlot() 返回 0-8（客户端预测先行）
+        int containerSlot = hovered.getContainerSlot();
+        if (containerSlot >= 0 && containerSlot <= 8 && containerSlot != selected) {
+            int hotbarMenuSlot = containerSlot + 36;
+            ItemStack hotbarItem = mc.player.getInventory().getItem(containerSlot).copy();
+            ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
+            mc.player.inventoryMenu.getSlot(heldSlotIndex).set(hotbarItem);
+            mc.player.inventoryMenu.getSlot(hotbarMenuSlot).set(heldItem);
+            mc.gameMode.handleCreativeModeItemAdd(hotbarItem, heldSlotIndex);
+            mc.gameMode.handleCreativeModeItemAdd(heldItem, hotbarMenuSlot);
+            didSwap = true;
         }
 
         if (didSwap) {
