@@ -4,7 +4,7 @@ license="LGPL-3.0"
 
 [[mods]]
 modId="susinstantswap"
-version="1.2.1"
+version="1.3.0"
 displayName="Su's Instant Swap"
 logoFile="assets/susinstantswap/icon.png"
 authors="Su_Crispy"
