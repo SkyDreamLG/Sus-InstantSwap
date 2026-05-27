@@ -72,6 +72,14 @@ public class SimpleConfigScreen extends Screen {
                 v -> config.guiSwapEnabled = v));
         y += SPACING;
 
+        // ── 空位交换开关 ──
+        addRenderableWidget(createToggle(
+                centerX, y,
+                "config.susinstantswap.emptySlotSwapEnabled",
+                config.emptySlotSwapEnabled,
+                v -> config.emptySlotSwapEnabled = v));
+        y += SPACING;
+
         // ── 调试日志开关 ──
         addRenderableWidget(createToggle(
                 centerX, y,
