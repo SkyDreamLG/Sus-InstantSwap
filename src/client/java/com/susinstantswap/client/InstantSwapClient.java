@@ -14,6 +14,7 @@ import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -76,7 +77,7 @@ public class InstantSwapClient {
     // ═══════════════════════════════════════════════════════════
 
     public static void init() {
-        LOGGER.info("[SusInstantSwap] v1.2.0 初始化客户端交换逻辑 (Fabric 1.21.1)...");
+        LOGGER.info("[SusInstantSwap] v1.3.0 初始化客户端交换逻辑 (Fabric 1.21.1)...");
         config = SwapConfig.get();
 
         SWAP_KEY = KeyBindingHelper.registerKeyBinding(new KeyMapping(
@@ -111,8 +112,8 @@ public class InstantSwapClient {
         // ── 首次日志 ──
         if (!configLogged) {
             configLogged = true;
-            LOGGER.info("[SusInstantSwap] 配置: longPressMode={}, holdThresholdMs={}, soundEnabled={}, guiSwapEnabled={}, mouseReposition={}, debug={}",
-                    config.longPressMode, config.holdThresholdMs, config.soundEnabled, config.guiSwapEnabled, config.mouseReposition, config.debug);
+            LOGGER.info("[SusInstantSwap] 配置: longPressMode={}, holdThresholdMs={}, soundEnabled={}, guiSwapEnabled={}, emptySlotSwapEnabled={}, mouseReposition={}, debug={}",
+                    config.longPressMode, config.holdThresholdMs, config.soundEnabled, config.guiSwapEnabled, config.emptySlotSwapEnabled, config.mouseReposition, config.debug);
         }
 
         // ── 早期退出 ──
@@ -176,6 +177,13 @@ public class InstantSwapClient {
     // ── NF InputEvent.Key PRESS 端口 ──
 
     private static void handleKeyPress(Minecraft mc, boolean creative) {
+        if (mc.screen != null && mc.screen.getFocused() instanceof EditBox) {
+            if (SWAP_KEY.same(mc.options.keyInventory)) {
+                while (mc.options.keyInventory.consumeClick()) { }
+            }
+            return;
+        }
+
         if (state != SwapState.IDLE) return;
         if (!canInteract(mc)) return;
 
@@ -253,10 +261,11 @@ public class InstantSwapClient {
     // 工具方法
     // ═══════════════════════════════════════════════════════════
 
-    private static boolean isVanillaInventoryKey() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.options == null) return false;
-        return SWAP_KEY.same(mc.options.keyInventory);
+
+
+    private static boolean canInteract(Minecraft mc) {
+        GameType mode = mc.gameMode.getPlayerMode();
+        return mode == GameType.SURVIVAL || mode == GameType.CREATIVE || mode == GameType.ADVENTURE;
     }
 
     /**
@@ -271,16 +280,6 @@ public class InstantSwapClient {
             return;
         }
         mc.setScreen(null);
-    }
-
-    private static boolean canInteract(Minecraft mc) {
-        GameType mode = mc.gameMode.getPlayerMode();
-        return mode == GameType.SURVIVAL || mode == GameType.CREATIVE || mode == GameType.ADVENTURE;
-    }
-
-    private static boolean isInventoryScreen(Screen screen) {
-        return screen instanceof InventoryScreen
-                || screen instanceof CreativeModeInventoryScreen;
     }
 
     private static Screen createInventoryScreen(Minecraft mc, boolean creative) {
@@ -375,7 +374,7 @@ public class InstantSwapClient {
         if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
 
         Slot hovered = getHoveredSlot(screen);
-        if (hovered == null || !hovered.hasItem()) {
+        if (hovered == null || (!hovered.hasItem() && !config.emptySlotSwapEnabled)) {
             debugLog("GUI交换: 悬停槽位无物品");
             return false;
         }
@@ -388,7 +387,6 @@ public class InstantSwapClient {
             if (!creative) return false;
             if (performGuiCreativeSwap(mc, (CreativeModeInventoryScreen) screen)) {
                 playSwapSound(mc);
-                if (mc.player != null) mc.player.closeContainer();
                 return true;
             }
             return false;
@@ -402,7 +400,6 @@ public class InstantSwapClient {
             }
             if (performGuiContainerSwap(screen, hoveredIndex, selectedHotbar)) {
                 playSwapSound(mc);
-                if (mc.player != null) mc.player.closeContainer();
                 debugLog("GUI交换: 槽位" + hoveredIndex + " <-> 快捷栏" + selectedHotbar);
                 return true;
             }
@@ -430,7 +427,7 @@ public class InstantSwapClient {
         if (mc.gameMode == null) return false;
 
         Slot hovered = getHoveredSlot(screen);
-        if (hovered == null || !hovered.hasItem()) return false;
+        if (hovered == null || (!hovered.hasItem() && !config.emptySlotSwapEnabled)) return false;
 
         int selected = mc.player.getInventory().selected;
         int heldSlotIndex = selected + 36;
@@ -576,7 +573,7 @@ public class InstantSwapClient {
         }
 
         Slot hovered = getHoveredSlot(mc.screen);
-        if (hovered == null || !hovered.hasItem()) {
+        if (hovered == null || (!hovered.hasItem() && !config.emptySlotSwapEnabled)) {
             LOGGER.warn("[SusInstantSwap] 生存交换失败: 悬停槽位无物品");
             return;
         }
@@ -627,7 +624,7 @@ public class InstantSwapClient {
         }
 
         Slot hovered = getHoveredSlot(mc.screen);
-        if (hovered == null || !hovered.hasItem()) {
+        if (hovered == null || (!hovered.hasItem() && !config.emptySlotSwapEnabled)) {
             LOGGER.warn("[SusInstantSwap] 创造交换失败: 悬停槽位无物品");
             return;
         }

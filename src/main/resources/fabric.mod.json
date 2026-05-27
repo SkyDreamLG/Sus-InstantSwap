@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
 	"id": "susinstantswap",
-	"version": "${version}",
+	"version": "1.3.0",
 	"name": "Su's Instant Swap",
 	"description": "Hold a key to open your inventory; release over a slot to instantly swap it with your hotbar selection. Supports long/short press dual modes, GUI swap, survival/creative/adventure game modes.",
 	"authors": [
