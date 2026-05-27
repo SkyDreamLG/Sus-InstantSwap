@@ -47,6 +47,8 @@ public class InstantSwapClient {
     /** tooltip 抑制剩余帧数，防止 flag 未消费时泄露到后续帧。 */
     private static int suppressTooltipFrames;
     private static boolean configLogged = false;
+    /** 菜单上下文：是否处于 ESC 暂停菜单或其子界面中（追踪界面打开路径） */
+    private static boolean inMenuContext = false;
 
     // ── 初始化 ──
 
@@ -72,6 +74,17 @@ public class InstantSwapClient {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
+
+        // ── 菜单上下文追踪 ──
+        // 追踪界面打开路径：一旦进入 PauseScreen 就标记为菜单上下文，
+        // 完全退出所有界面后才重置。用于区分"ESC菜单界面"和"游戏内打开的模组界面"。
+        if (mc.player == null) {
+            inMenuContext = false;       // 主菜单/退出时重置
+        } else if (mc.screen instanceof PauseScreen) {
+            inMenuContext = true;        // 进入暂停菜单
+        } else if (mc.screen == null) {
+            inMenuContext = false;       // 关闭所有界面，回到游戏
+        }
 
         // 清理已过期的 tooltip 抑制标记（防止泄露到正常游戏画面）
         if (suppressTooltipFrames > 0) {
@@ -154,6 +167,12 @@ public class InstantSwapClient {
         boolean isSwapKey = isSwapKeyEvent(event);
         boolean isGuiSwapKey = isGuiSwapKeyEvent(event);
 
+        // ── 排除界面：SWAP_KEY 在暂停菜单/设置/模组界面等完全不响应 ──
+        // 提前拦截，避免后续任何代码路径意外关闭这些界面
+        if (isSwapKey && mc.screen != null && isExcludedScreen(mc.screen)) {
+            return;
+        }
+
         // ── 文本输入保护：EditBox 获得焦点时消耗原版键绑定 ──
         // 防止原版键绑定（如 E=物品栏）关闭界面，GLFW charTyped 回调不受影响
         if (keyDown && isSwapKey && mc.screen != null
@@ -170,7 +189,7 @@ public class InstantSwapClient {
             //   - SWAP_IN_GUI_KEY 已指定 → 用它的按键
             //   - SWAP_IN_GUI_KEY 未指定 → 跟随 SWAP_KEY
             boolean triggerGuiSwap = isGuiSwapKey
-                    || (isSwapKey && isKeyUnassigned(SWAP_IN_GUI_KEY));
+                    || (isSwapKey && SWAP_IN_GUI_KEY.isUnbound());
 
             if (triggerGuiSwap && mc.screen instanceof AbstractContainerScreen) {
                 if (performGuiSwap(mc, creative)) {
@@ -186,7 +205,7 @@ public class InstantSwapClient {
             }
 
             // 纯界面模式：只指定了界面中更换键，未指定即时交换键
-            if (isGuiSwapKey && isKeyUnassigned(SWAP_KEY)) {
+            if (isGuiSwapKey && SWAP_KEY.isUnbound()) {
                 return;
             }
         }
@@ -201,8 +220,8 @@ public class InstantSwapClient {
             if (state == SwapState.IDLE) {
                 // 有界面打开 → 模拟原版物品栏键（E键）行为
                 if (mc.screen != null) {
-                    // 排除聊天和暂停界面（不应被干扰）
-                    if (mc.screen instanceof ChatScreen || mc.screen instanceof PauseScreen) {
+                    // 排除不应被干扰的界面（聊天、暂停菜单、设置、模组界面）
+                    if (isExcludedScreen(mc.screen)) {
                         return;
                     }
                     simulateVanillaInventoryKey(mc);
@@ -276,9 +295,21 @@ public class InstantSwapClient {
         return matchesKeyEvent(event, SWAP_IN_GUI_KEY);
     }
 
-    /** 检查按键映射是否未指定（玩家在控制菜单中未绑定任何键） */
-    private static boolean isKeyUnassigned(KeyMapping mapping) {
-        return mapping.isUnbound();
+    /**
+     * 判断当前打开的界面是否应排除（SWAP_KEY 不响应），与原版 E 键行为一致。
+     * <p>
+     * 策略：追踪界面打开路径（onClientTick 维护 inMenuContext）：
+     * <ul>
+     *   <li>聊天界面 → 始终排除</li>
+     *   <li>从 ESC 暂停菜单打开的界面（含所有子菜单）→ 排除</li>
+     *   <li>游戏内直接打开的界面（Ponder、EMI、容器等）→ 不排除，正常关闭</li>
+     * </ul>
+     */
+    private static boolean isExcludedScreen(Screen screen) {
+        if (screen instanceof ChatScreen) {
+            return true;
+        }
+        return inMenuContext;
     }
 
     /**
@@ -320,9 +351,6 @@ public class InstantSwapClient {
             return false;
         }
 
-        int hoveredIndex = hoveredSlot.index;
-        int selectedHotbar = mc.player.getInventory().selected;
-
         // ── 创造模式物品栏 ──
         if (screen instanceof CreativeModeInventoryScreen) {
             if (!creative) return false;
@@ -335,6 +363,8 @@ public class InstantSwapClient {
 
         // ── 生存/冒险物品栏：仅允许背包+快捷栏（9-44）──
         if (screen instanceof InventoryScreen) {
+            int hoveredIndex = hoveredSlot.index;
+            int selectedHotbar = mc.player.getInventory().selected;
             int hotbarMenuSlot = selectedHotbar + 36;
             if (!isAllowedMenuSlot(hoveredIndex) || hoveredIndex == hotbarMenuSlot) {
                 debugLog("GUI交换: 不允许的槽位 (悬停=" + hoveredIndex + ")");
