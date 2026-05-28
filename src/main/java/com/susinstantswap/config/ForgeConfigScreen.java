@@ -66,6 +66,13 @@ public class ForgeConfigScreen extends Screen {
                 v -> SwapConfig.guiSwapEnabledRuntime = v));
         y += SPACING;
 
+        // ── 空位交换开关 ──
+        addRenderableWidget(createToggle(centerX, y,
+                "config.susinstantswap.emptySlotSwapEnabled",
+                SwapConfig.emptySlotSwapEnabledRuntime,
+                v -> SwapConfig.emptySlotSwapEnabledRuntime = v));
+        y += SPACING;
+
         // ── 调试日志开关 ──
         addRenderableWidget(createToggle(centerX, y,
                 "config.susinstantswap.debug",

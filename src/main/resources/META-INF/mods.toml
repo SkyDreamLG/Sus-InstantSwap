@@ -9,11 +9,7 @@ version="${mod_version}"
 displayName="Su's Instant Swap"
 logoFile="assets/susinstantswap/icon.png"
 authors="Su_Crispy"
-description='''
-Hold a key to open your inventory; release over a slot to instantly swap it with your hotbar selection.
-Supports long/short press dual modes, GUI swap, survival/creative/adventure game modes.
-Default key: Left Alt (can be changed in Controls settings).
-'''
+description="Hold a key to open your inventory; release over a slot to instantly swap it with your hotbar selection. Supports long/short press dual modes, GUI swap, survival/creative/adventure game modes."
 
 [[dependencies.susinstantswap]]
     modId="forge"
