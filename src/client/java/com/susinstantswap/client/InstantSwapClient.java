@@ -155,10 +155,7 @@ public class InstantSwapClient {
                 if (performGuiSwap(mc, creative)) {
                     debugLog("GUI 交换完成");
                     state = SwapState.IDLE;
-                    // SWAP_KEY 触发时：交换后关闭界面
-                    if (pressed) {
-                        mc.player.closeContainer();
-                    }
+                    mc.player.closeContainer();
                     prevDown = isSwapKeyDown(); // 重新同步边缘状态
                     return;
                 }

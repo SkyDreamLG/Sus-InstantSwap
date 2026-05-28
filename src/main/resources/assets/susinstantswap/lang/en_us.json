@@ -1,7 +1,7 @@
 {
     "key.susinstantswap.swap": "Instant Swap",
     "key.susinstantswap.swap_in_gui": "Swap in GUI",
-    "key.category.susinstantswap.main": "Su's Instant Swap",
+    "key.categories.susinstantswap": "Su's Instant Swap",
     "susinstantswap.description": "Hold Alt: short press toggles inventory, long press for instant swap. Works in all game modes.",
 
     "config.susinstantswap.title": "Su's Instant Swap Config",
@@ -22,7 +22,7 @@
     "config.susinstantswap.guiSwapEnabled.tooltip": "When enabled, press the swap key while hovering over an item in any GUI to swap and close the screen.",
 
     "config.susinstantswap.emptySlotSwapEnabled": "Empty Slot Swap",
-    "config.susinstantswap.emptySlotSwapEnabled.tooltip": "When enabled, allows swapping items into empty inventory slots.",
+    "config.susinstantswap.emptySlotSwapEnabled.tooltip": "When enabled, pressing the swap key on an empty slot will also perform the swap (e.g. move hotbar item to backpack).",
 
     "config.susinstantswap.debug": "Debug Logging",
     "config.susinstantswap.debug.tooltip": "Output debug messages to the game log.",
