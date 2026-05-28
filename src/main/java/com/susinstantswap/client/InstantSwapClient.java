@@ -50,6 +50,7 @@ public class InstantSwapClient {
     /** tooltip 抑制剩余帧数，防止 flag 未消费时泄露到后续帧。 */
     private static int suppressTooltipFrames;
     private static boolean configLogged = false;
+    private static boolean inMenuContext = false;
 
     // ── 初始化 ──
 
@@ -75,6 +76,15 @@ public class InstantSwapClient {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
+
+        // ── 菜单上下文追踪 ──
+        if (mc.player == null) {
+            inMenuContext = false;
+        } else if (mc.screen instanceof PauseScreen) {
+            inMenuContext = true;
+        } else if (mc.screen == null) {
+            inMenuContext = false;
+        }
 
         // 清理已过期的 tooltip 抑制标记（防止泄露到正常游戏画面）
         if (suppressTooltipFrames > 0) {
@@ -179,11 +189,7 @@ public class InstantSwapClient {
                 if (performGuiSwap(mc, creative)) {
                     debugLog("KeyEvent: 界面中更换完成");
                     state = SwapState.IDLE;
-                    // SWAP_KEY 触发时：交换后关闭界面
-                    // SWAP_IN_GUI_KEY 触发时：仅交换不关闭
-                    if (isSwapKey) {
-                        mc.player.closeContainer();
-                    }
+                    mc.player.closeContainer();
                     return;
                 }
             }
@@ -199,12 +205,13 @@ public class InstantSwapClient {
 
         if (keyDown) {
             if (!canInteract(mc)) return;
+        if (mc.screen != null && isExcludedScreen(mc.screen)) { return; }
 
             if (state == SwapState.IDLE) {
                 // 有界面打开 → 模拟原版物品栏键（E键）行为
                 if (mc.screen != null) {
                     // 排除聊天和暂停界面（不应被干扰）
-                    if (mc.screen instanceof ChatScreen || mc.screen instanceof PauseScreen) {
+                    if (isExcludedScreen(mc.screen)) {
                         return;
                     }
                     simulateVanillaInventoryKey(mc);
@@ -284,18 +291,19 @@ public class InstantSwapClient {
     }
 
     /**
-     * 模拟原版物品栏键（E键）行为。
+     * 模拟原版物品栏键（E键）行为——关闭/返回当前屏幕。
      * <p>
-     * MC 26.1 中 Screen.keyPressed 接受 KeyEvent 参数，无法直接模拟按键。
-     * 改用 removed() 方式：先让当前屏幕自行清理（EMI 配方界面会在此恢复物品栏父界面），
-     * 如果屏幕未被替换，则关闭容器/物品栏。
+     * 先调用 onClose()（MC 26.1 的 ESC 标准处理入口），
+     * 如果屏幕被替换（JEI 配方界面返回物品栏），直接返回。
+     * 否则关闭容器/物品栏。
      */
     private static void simulateVanillaInventoryKey(Minecraft mc) {
         Screen prevScreen = mc.screen;
-        prevScreen.removed();
-        if (mc.screen == prevScreen) {
-            mc.player.closeContainer();
+        prevScreen.onClose();
+        if (mc.screen != prevScreen) {
+            return;
         }
+        mc.player.closeContainer();
     }
 
     // ── 界面中更换 ──
@@ -434,6 +442,11 @@ public class InstantSwapClient {
         }
 
         return false;
+    }
+
+        private static boolean isExcludedScreen(Screen screen) {
+        if (screen instanceof ChatScreen) return true;
+        return inMenuContext;
     }
 
     private static boolean canInteract(Minecraft mc) {

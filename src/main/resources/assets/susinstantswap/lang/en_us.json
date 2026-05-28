@@ -1,7 +1,7 @@
 {
     "key.susinstantswap.swap": "Instant Swap",
     "key.susinstantswap.swap_in_gui": "Swap in GUI",
-    "key.category.susinstantswap.main": "Su's Instant Swap",
+    "key.categories.susinstantswap": "Su's Instant Swap",
     "susinstantswap.description": "Hold Alt: short press toggles inventory, long press for instant swap. Works in all game modes.",
 
     "config.susinstantswap.title": "Su's Instant Swap Config",
