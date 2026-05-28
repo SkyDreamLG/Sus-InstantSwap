@@ -168,6 +168,7 @@ public class InstantSwapClient {
                 if (performGuiSwap(mc, creative)) {
                     debugLog("GUI 交换完成（专用键）");
                     state = SwapState.IDLE;
+                    mc.player.closeContainer();
                     prevDown = isSwapKeyDown();
                     return;
                 }
