@@ -219,6 +219,10 @@ public class InstantSwapClient {
         Slot hs = screen.getSlotUnderMouse();
         if (hs == null || (!hs.hasItem() && !config.emptySlotSwapEnabled.get())) return false;
 
+        // Equipment slots (armor, offhand) — never swappable
+        int csi = hs.getContainerSlot();
+        if (csi >= 36 || (isPlayerInventorySlot(hs) && csi >= 5 && csi < 9)) return false;
+
         int sel = mc.player.getInventory().selected;
         boolean creative = mc.gameMode.hasInfiniteItems();
 
