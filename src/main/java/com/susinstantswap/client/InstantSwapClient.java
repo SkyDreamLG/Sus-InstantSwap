@@ -240,6 +240,10 @@ public class InstantSwapClient {
         if (screen instanceof InventoryScreen && (!isPlayerInventorySlot(hs) || hs.index == hotbarMenuSlot(sel)))
             return false;
 
+        // Slot validation: hand item must fit the target slot (e.g., Curios ring slot rejects non-ring items)
+        ItemStack hand = mc.player.getInventory().getItem(sel);
+        if (!hand.isEmpty() && !hs.mayPlace(hand)) return false;
+
         // All containers → ClickType.SWAP
         if (containerSwap(screen, hs.index, sel)) {
             playSwapSound(mc);
