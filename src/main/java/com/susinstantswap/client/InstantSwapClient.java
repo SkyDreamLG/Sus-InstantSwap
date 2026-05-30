@@ -233,10 +233,6 @@ public class InstantSwapClient {
             return false;
         }
 
-        // Equipment slots (armor, offhand) — blocked in survival
-        int csi = hs.getContainerSlot();
-        if (csi >= 36) return false;
-
         // Player inventory → restrict to backpack + hotbar
         if (screen instanceof InventoryScreen && (!isPlayerInventorySlot(hs) || hs.index == hotbarMenuSlot(sel)))
             return false;
