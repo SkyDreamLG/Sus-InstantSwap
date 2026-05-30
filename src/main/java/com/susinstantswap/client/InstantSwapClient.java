@@ -174,7 +174,7 @@ public class InstantSwapClient {
         if (action != GLFW.GLFW_PRESS && action != GLFW.GLFW_RELEASE) return;
 
         boolean keyDown = (action == GLFW.GLFW_PRESS);
-        boolean isInventoryKey = isInventoryKeyEvent(event);
+        boolean isInventoryKey = isInventoryKeyEvent(mc, event);
         boolean isGuiSwapKey = SWAP_IN_GUI_KEY.isUnbound() ? false : isGuiSwapKeyEvent(event);
 
         // EditBox protection: consume vanilla click so E doesn't close screen
@@ -406,8 +406,7 @@ public class InstantSwapClient {
         return GLFW.glfwGetKey(mc.getWindow().getWindow(), key.getValue()) == GLFW.GLFW_PRESS;
     }
 
-    private static boolean isInventoryKeyEvent(InputEvent.Key event) {
-        Minecraft mc = Minecraft.getInstance();
+    private static boolean isInventoryKeyEvent(Minecraft mc, InputEvent.Key event) {
         InputConstants.Key ik = mc.options.keyInventory.getKey();
         return ik.getType() == InputConstants.Type.KEYSYM && event.getKey() == ik.getValue();
     }
