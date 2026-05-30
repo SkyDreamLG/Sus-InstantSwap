@@ -1,4 +1,5 @@
 {
+  "description.susinstantswap": "按住物品栏键将物品与快捷栏交换。与原版共存——短按打开背包，长按执行交换。",
   "key.susinstantswap.swap_in_gui": "界面中更换",
   "key.categories.susinstantswap": "探囊取物",
   "config.susinstantswap.title": "探囊取物 - 配置",
@@ -9,9 +10,9 @@
   "config.susinstantswap.soundEnabled": "交换音效",
   "config.susinstantswap.soundEnabled.tooltip": "交换物品时播放音效。",
   "config.susinstantswap.mouseReposition": "鼠标重定位",
-  "config.susinstantswap.mouseReposition.tooltip": "打开容器或长按时自动将鼠标移到界面右下角。",
+  "config.susinstantswap.mouseReposition.tooltip": "打开容器或物品栏时，鼠标将自动移到界面右下角。",
   "config.susinstantswap.guiSwapEnabled": "界面中更换",
-  "config.susinstantswap.guiSwapEnabled.tooltip": "在任意容器界面中，悬停物品时按物品栏键可直接交换并关闭。",
+  "config.susinstantswap.guiSwapEnabled.tooltip": "在容器界面中，可通过界面内交换按键直接交换物品并关闭界面。",
   "config.susinstantswap.emptySlotSwapEnabled": "空位交换",
   "config.susinstantswap.emptySlotSwapEnabled.tooltip": "悬停空槽位时也可执行交换。",
   "config.susinstantswap.debug": "调试日志",

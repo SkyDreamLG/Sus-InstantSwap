@@ -20,9 +20,9 @@ public class SwapConfig {
         soundEnabled = builder.translation("config.susinstantswap.soundEnabled")
                 .comment("Swap Sound").define("soundEnabled", true);
         mouseReposition = builder.translation("config.susinstantswap.mouseReposition")
-                .comment("Auto-move cursor to bottom-right when container opens").define("mouseReposition", true);
+                .comment("Open container or inventory, the mouse will automatically move to the bottom-right corner").define("mouseReposition", true);
         guiSwapEnabled = builder.translation("config.susinstantswap.guiSwapEnabled")
-                .comment("Press inventory key on a slot to swap and close").define("guiSwapEnabled", false);
+                .comment("In container screens, press the GUI swap key to directly swap items and close the screen").define("guiSwapEnabled", false);
         emptySlotSwapEnabled = builder.translation("config.susinstantswap.emptySlotSwapEnabled")
                 .comment("Also swap empty slots").define("emptySlotSwapEnabled", false);
         debug = builder.translation("config.susinstantswap.debug")

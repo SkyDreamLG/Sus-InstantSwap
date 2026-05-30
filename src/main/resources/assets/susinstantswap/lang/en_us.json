@@ -1,4 +1,5 @@
 {
+  "description.susinstantswap": "Hold the inventory key to swap items with your hotbar. Coexists with vanilla — short press toggles inventory, long press swaps.",
   "key.susinstantswap.swap_in_gui": "Swap in GUI",
   "key.categories.susinstantswap": "Su's Instant Swap",
   "config.susinstantswap.title": "Su's Instant Swap Config",
@@ -9,9 +10,9 @@
   "config.susinstantswap.soundEnabled": "Swap Sound",
   "config.susinstantswap.soundEnabled.tooltip": "Play a sound when swapping items.",
   "config.susinstantswap.mouseReposition": "Mouse Reposition",
-  "config.susinstantswap.mouseReposition.tooltip": "Move cursor to bottom-right when a container opens or long press starts.",
+  "config.susinstantswap.mouseReposition.tooltip": "When opening a container or inventory, the mouse automatically moves to the bottom-right corner.",
   "config.susinstantswap.guiSwapEnabled": "GUI Swap",
-  "config.susinstantswap.guiSwapEnabled.tooltip": "Press the inventory key on a slot to swap and close the screen.",
+  "config.susinstantswap.guiSwapEnabled.tooltip": "In container screens, press the GUI swap key to directly swap items and close the screen.",
   "config.susinstantswap.emptySlotSwapEnabled": "Empty Slot Swap",
   "config.susinstantswap.emptySlotSwapEnabled.tooltip": "Also perform the swap on empty slots.",
   "config.susinstantswap.debug": "Debug Logging",
