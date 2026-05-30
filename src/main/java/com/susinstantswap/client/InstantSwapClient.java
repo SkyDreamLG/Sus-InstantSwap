@@ -153,7 +153,10 @@ public class InstantSwapClient {
         if (state == SwapState.LONG_PRESS) {
             if (mc.screen == null) { state = SwapState.IDLE; return; }
             if (!isInventoryKeyPhysicallyDown(mc) || !SwapKeyState.inventoryKeyHeld) {
-                performSwap(mc);
+                boolean swapped = performSwap(mc);
+                if (!swapped) {
+                    SwapKeyState.closePendingTicks = 1; // auto-close on next tick
+                }
                 state = SwapState.IDLE;
             }
         }
