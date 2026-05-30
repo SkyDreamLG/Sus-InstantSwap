@@ -17,6 +17,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
@@ -110,7 +111,7 @@ public class InstantSwapClient {
             return;
         }
 
-        // Deferred close — 1 tick for survival, 2 ticks for creative
+        // Deferred close — gives server a tick to sync after swap
         if (SwapKeyState.closePendingTicks > 0) {
             SwapKeyState.closePendingTicks--;
             if (SwapKeyState.closePendingTicks == 0) {
@@ -153,8 +154,6 @@ public class InstantSwapClient {
             if (mc.screen == null) { state = SwapState.IDLE; return; }
             if (!isInventoryKeyPhysicallyDown(mc) || !SwapKeyState.inventoryKeyHeld) {
                 performSwap(mc);
-                if (!(mc.screen instanceof CreativeModeInventoryScreen))
-                    SwapKeyState.closePendingTicks = 1;
                 state = SwapState.IDLE;
             }
         }
@@ -186,10 +185,7 @@ public class InstantSwapClient {
         if (keyDown && config.guiSwapEnabled.get()) {
             if ((isGuiSwapKey || (isInventoryKey && SWAP_IN_GUI_KEY.isUnbound()))
                     && mc.screen instanceof AbstractContainerScreen) {
-                if (performSwap(mc)) {
-                    if (!(mc.screen instanceof CreativeModeInventoryScreen))
-                        SwapKeyState.closePendingTicks = 1;
-                }
+                performSwap(mc);
             }
         }
     }
@@ -200,12 +196,7 @@ public class InstantSwapClient {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.gameMode == null) return false;
         if (!config.guiSwapEnabled.get() || !SWAP_IN_GUI_KEY.isUnbound()) return false;
-        if (performSwap(mc)) {
-            if (!(screen instanceof CreativeModeInventoryScreen))
-                SwapKeyState.closePendingTicks = 1;
-            return true;
-        }
-        return false;
+        return performSwap(mc);
     }
 
     @SubscribeEvent
@@ -225,6 +216,10 @@ public class InstantSwapClient {
         if (hs == null || (!hs.hasItem() && !config.emptySlotSwapEnabled.get())) return false;
 
         int sel = mc.player.getInventory().selected;
+
+        // Both slots empty → nothing to swap (unified before creative/survival split)
+        if (!hs.hasItem() && mc.player.getInventory().getItem(sel).isEmpty()) return false;
+
         boolean creative = mc.gameMode.hasInfiniteItems();
 
         // ── Creative inventory → special handling (must be BEFORE csi filter) ──
@@ -234,9 +229,9 @@ public class InstantSwapClient {
             return false;
         }
 
-        // Equipment slots (armor, offhand) — never swappable in survival
+        // Equipment slots (armor, offhand) — blocked in survival
         int csi = hs.getContainerSlot();
-        if (csi >= 36 || (isPlayerInventorySlot(hs) && csi >= 5 && csi < 9)) return false;
+        if (csi >= 36) return false;
 
         // Player inventory → restrict to backpack + hotbar
         if (screen instanceof InventoryScreen && (!isPlayerInventorySlot(hs) || hs.index == hotbarMenuSlot(sel)))
@@ -245,6 +240,7 @@ public class InstantSwapClient {
         // All containers → ClickType.SWAP
         if (containerSwap(screen, hs.index, sel)) {
             playSwapSound(mc);
+            SwapKeyState.closePendingTicks = 1;
             return true;
         }
         return false;
@@ -269,77 +265,93 @@ public class InstantSwapClient {
         int menuHotbarStart = 36;
         int heldIdx = menuHotbarStart + sel;
         ItemStack handStack = mc.player.getInventory().getItem(sel);
-
-        // Both slots empty → nothing to swap
-        if (!hs.hasItem() && handStack.isEmpty()) return false;
+        debugLog("creativeSwap ENTER: sel=" + sel + " hand=" + (handStack.isEmpty()?"EMPTY":handStack.getDisplayName().getString())
+                + " hs.container=" + (hs.container==CreativeModeInventoryScreen.CONTAINER?"CONTAINER":hs.container==mc.player.getInventory()?"PLAYER_INV":
+                  hs instanceof CreativeModeInventoryScreen.SlotWrapper?"SlotWrapper("+((CreativeModeInventoryScreen.SlotWrapper)hs).target.index+")":"OTHER")
+                + " hs.index=" + hs.index + " csi=" + hs.getContainerSlot());
 
         if (hs.container == CreativeModeInventoryScreen.CONTAINER) {
+            debugLog("  branch=CONTAINER");
             ItemStack held = handStack.copy();
             ItemStack item = hs.getItem().copyWithCount(1);
+            debugLog("  held=" + (held.isEmpty()?"EMPTY":held.getDisplayName().getString()) + " item=" + item.getDisplayName().getString());
             if (!held.isEmpty()) {
                 int f = freeSlot(mc);
+                debugLog("  freeSlot=" + f);
                 if (f >= 0 && f < mc.player.getInventory().items.size()) {
                     mc.player.getInventory().items.set(f, held.copy());
                     mc.gameMode.handleCreativeModeItemAdd(held.copy(), menuHotbarStart + f);
+                    debugLog("  items.set(" + f + ",held) + addItem(" + (menuHotbarStart+f) + ")");
                 }
             }
             if (sel < mc.player.getInventory().items.size()) {
                 mc.player.getInventory().items.set(sel, item);
                 mc.gameMode.handleCreativeModeItemAdd(item, heldIdx);
+                debugLog("  items.set(" + sel + ",item) + addItem(" + heldIdx + ")");
             }
             SwapKeyState.closePendingTicks = 1;
             return true;
         }
 
-        // ── Equipment slots (armor 36-39, offhand 40) ──
-        // Detect by matching the hovered item against player armor/offhand
-        int equipInvIdx = -1;
-        if (hs.hasItem()) {
-            for (int i = 36; i <= 40; i++) {
-                if (hs.getItem() == mc.player.getInventory().getItem(i)) {
-                    equipInvIdx = i;
-                    break;
+        // Creative equipment: csi=5-8 (armor) or 45 (offhand) — use native SWAP
+        int csi = hs.getContainerSlot();
+        if (csi == 45 || (csi >= 5 && csi <= 8)) {
+            debugLog("  branch=CREATIVE_EQUIP csi=" + csi + " sel=" + sel);
+            // Armor type validation
+            if (csi <= 8 && !handStack.isEmpty()) {
+                EquipmentSlot expected = csi == 5 ? EquipmentSlot.HEAD :
+                                        csi == 6 ? EquipmentSlot.CHEST :
+                                        csi == 7 ? EquipmentSlot.LEGS : EquipmentSlot.FEET;
+                EquipmentSlot actual = mc.player.getEquipmentSlotForItem(handStack);
+                if (!actual.isArmor() || actual != expected) {
+                    debugLog("  armor mismatch: expected=" + expected + " actual=" + actual + " -> false");
+                    return false;
                 }
             }
-        }
-
-        if (equipInvIdx >= 0) {
-            ItemStack ti = hs.getItem().copy();
-            ItemStack hi = handStack.copy();
-            mc.player.getInventory().setItem(sel, ti);
-            mc.gameMode.handleCreativeModeItemAdd(ti, heldIdx);
-            mc.player.getInventory().setItem(equipInvIdx, hi);
-            SwapKeyState.closePendingTicks = equipInvIdx == 40 ? 2 : 1;
+            mc.gameMode.handleInventoryMouseClick(
+                cs.getMenu().containerId, csi, sel, ClickType.SWAP, mc.player);
+            debugLog("  handleInventoryMouseClick(slot=" + csi + " hotbar=" + sel + " SWAP)");
+            SwapKeyState.closePendingTicks = 1;
             return true;
         }
 
         if (hs instanceof CreativeModeInventoryScreen.SlotWrapper w) {
             int t = w.target.index;
+            debugLog("  branch=SlotWrapper t=" + t + " heldMenuIdx=" + heldIdx);
             if (isPlayerInventorySlot(w) && t != heldIdx) {
                 ItemStack ti = cs.getMenu().getSlot(t).getItem().copy();
                 ItemStack hi = cs.getMenu().getSlot(heldIdx).getItem().copy();
+                int invIdx = t >= menuHotbarStart ? t - menuHotbarStart : t;
+                debugLog("  ti=" + ti.getDisplayName().getString() + " hi=" + hi.getDisplayName().getString() + " invIdx=" + invIdx);
                 safeSet(mc, sel, ti);
                 mc.gameMode.handleCreativeModeItemAdd(ti, heldIdx);
-                int invIdx = t >= menuHotbarStart ? t - menuHotbarStart : t;
+                debugLog("  safeSet(" + sel + ",ti) + addItem(" + heldIdx + ")");
                 safeSet(mc, invIdx, hi);
                 mc.gameMode.handleCreativeModeItemAdd(hi, t);
+                debugLog("  safeSet(" + invIdx + ",hi) + addItem(" + t + ")");
                 SwapKeyState.closePendingTicks = 1;
                 return true;
             }
+            debugLog("  SKIP: sameSlot=" + (t==heldIdx) + " isPlayerInv=" + isPlayerInventorySlot(w));
             return false;
         }
 
         int c2 = hs.getContainerSlot();
+        debugLog("  branch=REGULAR c2=" + c2);
         if (c2 >= 0 && c2 < hotbarSize && c2 != sel) {
             ItemStack hi = handStack.copy();
             ItemStack oi = mc.player.getInventory().getItem(c2).copy();
+            debugLog("  hi(hand->target)=" + (hi.isEmpty()?"EMPTY":hi.getDisplayName().getString()) + " oi(target->hotbar)=" + oi.getDisplayName().getString());
             safeSet(mc, sel, oi);
             mc.gameMode.handleCreativeModeItemAdd(oi, heldIdx);
+            debugLog("  safeSet(" + sel + ",oi) + addItem(" + heldIdx + ")");
             safeSet(mc, c2, hi);
             mc.gameMode.handleCreativeModeItemAdd(hi, menuHotbarStart + c2);
+            debugLog("  safeSet(" + c2 + ",hi) + addItem(" + (menuHotbarStart+c2) + ")");
             SwapKeyState.closePendingTicks = 1;
             return true;
         }
+        debugLog("  NO MATCH -> false");
         return false;
     }
 
