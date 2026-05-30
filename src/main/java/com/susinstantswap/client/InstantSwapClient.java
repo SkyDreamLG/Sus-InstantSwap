@@ -155,7 +155,8 @@ public class InstantSwapClient {
             if (!isInventoryKeyPhysicallyDown(mc) || !SwapKeyState.inventoryKeyHeld) {
                 boolean swapped = performSwap(mc);
                 if (!swapped) {
-                    SwapKeyState.closePendingTicks = 1; // auto-close on next tick
+                    int closeDelay = (mc.screen instanceof AbstractContainerScreen<?> s && isVanillaInventory(s)) ? 1 : 2;
+                    SwapKeyState.closePendingTicks = closeDelay; // auto-close
                 }
                 state = SwapState.IDLE;
             }
@@ -244,10 +245,12 @@ public class InstantSwapClient {
         ItemStack hand = mc.player.getInventory().getItem(sel);
         if (!hand.isEmpty() && !hs.mayPlace(hand)) return false;
 
+        int closeDelay = isVanillaInventory(screen) ? 1 : 2;
+
         // All containers → ClickType.SWAP
         if (containerSwap(screen, hs.index, sel)) {
             playSwapSound(mc);
-            SwapKeyState.closePendingTicks = 1;
+            SwapKeyState.closePendingTicks = closeDelay;
             return true;
         }
         return false;
@@ -369,6 +372,10 @@ public class InstantSwapClient {
 
     private static boolean isPlayerInventorySlot(Slot slot) {
         return slot.container == Minecraft.getInstance().player.getInventory();
+    }
+
+    private static boolean isVanillaInventory(AbstractContainerScreen<?> screen) {
+        return screen instanceof InventoryScreen || screen instanceof CreativeModeInventoryScreen;
     }
 
     private static int hotbarMenuSlot(int sel) {
