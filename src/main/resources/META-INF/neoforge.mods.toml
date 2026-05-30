@@ -8,7 +8,7 @@ version="2.0.0"
 displayName="Su's Instant Swap"
 logoFile="assets/susinstantswap/icon.png"
 authors="Su_Crispy"
-description="description.susinstantswap"
+description="Hold the inventory key to swap items with your hotbar. Coexists with vanilla — short press toggles inventory, long press swaps."
 
 [[mixins]]
 config="susinstantswap.mixins.json"
