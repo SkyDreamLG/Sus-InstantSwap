@@ -300,6 +300,11 @@ public class InstantSwapClient {
         int csi = hs.getContainerSlot();
         if (cs.isInventoryOpen() && (csi == 45 || (csi >= 5 && csi <= 8))) {
             debugLog("  branch=CREATIVE_EQUIP csi=" + csi + " sel=" + sel);
+            // Slot type validation — reject items that don't fit the equipment slot
+            if (!handStack.isEmpty() && !hs.mayPlace(handStack)) {
+                debugLog("  mayPlace rejected -> false");
+                return false;
+            }
             // Armor type validation
             if (csi <= 8 && !handStack.isEmpty()) {
                 EquipmentSlot expected = csi == 5 ? EquipmentSlot.HEAD :
