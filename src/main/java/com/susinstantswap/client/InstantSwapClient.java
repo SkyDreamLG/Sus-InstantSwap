@@ -36,6 +36,8 @@ public class InstantSwapClient {
 
     private static final Logger LOGGER = LogUtils.getLogger();
     private static KeyMapping SWAP_IN_GUI_KEY;
+    private static KeyMapping CUSTOM_SWAP_KEY_1;
+    private static KeyMapping CUSTOM_SWAP_KEY_2;
     private static SwapConfig config;
 
     enum SwapState { IDLE, WATCHING, LONG_PRESS }
@@ -51,11 +53,19 @@ public class InstantSwapClient {
         SWAP_IN_GUI_KEY = new KeyMapping("key.susinstantswap.swap_in_gui",
                 InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(),
                 "key.categories.susinstantswap");
+        CUSTOM_SWAP_KEY_1 = new KeyMapping("key.susinstantswap.custom_swap_1",
+                InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(),
+                "key.categories.susinstantswap");
+        CUSTOM_SWAP_KEY_2 = new KeyMapping("key.susinstantswap.custom_swap_2",
+                InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(),
+                "key.categories.susinstantswap");
         NeoForge.EVENT_BUS.register(InstantSwapClient.class);
     }
 
     public static void registerKey(RegisterKeyMappingsEvent event) {
         event.register(SWAP_IN_GUI_KEY);
+        event.register(CUSTOM_SWAP_KEY_1);
+        event.register(CUSTOM_SWAP_KEY_2);
     }
 
     // ── Container opened via right-click → reposition cursor ──
@@ -139,7 +149,7 @@ public class InstantSwapClient {
         // ── WATCHING: check threshold ──
         if (state == SwapState.WATCHING) {
             if (mc.screen == null) { state = SwapState.IDLE; return; }
-            if (!isInventoryKeyPhysicallyDown(mc)) { state = SwapState.IDLE; return; }
+            if (!isAnySwapKeyDown(mc)) { state = SwapState.IDLE; return; }
             if ((System.nanoTime() - SwapKeyState.pressStartNanos)
                     >= config.holdThresholdMs.get() * 1_000_000L) {
                 SwapKeyState.longPressConfirmed = true;
@@ -152,7 +162,7 @@ public class InstantSwapClient {
         // ── LONG_PRESS → release triggers swap ──
         if (state == SwapState.LONG_PRESS) {
             if (mc.screen == null) { state = SwapState.IDLE; return; }
-            if (!isInventoryKeyPhysicallyDown(mc) || !SwapKeyState.inventoryKeyHeld) {
+            if (!isAnySwapKeyDown(mc) || !SwapKeyState.inventoryKeyHeld) {
                 boolean swapped = performSwap(mc);
                 if (!swapped) {
                     int closeDelay = (mc.screen instanceof AbstractContainerScreen<?> s && isVanillaInventory(s)) ? 1 : 2;
@@ -175,11 +185,16 @@ public class InstantSwapClient {
 
         boolean keyDown = (action == GLFW.GLFW_PRESS);
         boolean isInventoryKey = isInventoryKeyEvent(mc, event);
+        boolean isCustomKey1 = isCustomKeyEvent(CUSTOM_SWAP_KEY_1, event);
+        boolean isCustomKey2 = isCustomKeyEvent(CUSTOM_SWAP_KEY_2, event);
+        boolean isAnySwapKey = isInventoryKey || isCustomKey1 || isCustomKey2;
         boolean isGuiSwapKey = SWAP_IN_GUI_KEY.isUnbound() ? false : isGuiSwapKeyEvent(event);
 
-        // EditBox protection: consume vanilla click so E doesn't close screen
-        if (keyDown && isInventoryKey && mc.screen != null && hasEditBoxFocus(mc.screen)) {
-            while (mc.options.keyInventory.consumeClick()) {}
+        // EditBox protection: consume click so swap keys don't close screen
+        if (keyDown && isAnySwapKey && mc.screen != null && hasEditBoxFocus(mc.screen)) {
+            if (isInventoryKey) while (mc.options.keyInventory.consumeClick()) {}
+            if (isCustomKey1) while (CUSTOM_SWAP_KEY_1.consumeClick()) {}
+            if (isCustomKey2) while (CUSTOM_SWAP_KEY_2.consumeClick()) {}
             if (mc.screen instanceof AbstractContainerScreen) {
                 if (mc.player.containerMenu.getSlot(0).hasItem()) return;
             } else return;
@@ -187,7 +202,7 @@ public class InstantSwapClient {
 
         // GUI swap
         if (keyDown && config.guiSwapEnabled.get()) {
-            if ((isGuiSwapKey || (isInventoryKey && SWAP_IN_GUI_KEY.isUnbound()))
+            if ((isGuiSwapKey || (isAnySwapKey && SWAP_IN_GUI_KEY.isUnbound()))
                     && mc.screen instanceof AbstractContainerScreen) {
                 performSwap(mc);
             }
@@ -396,6 +411,33 @@ public class InstantSwapClient {
 
     // ── Key detection ──
 
+    /** Public entry for mixins: checks whether an InputConstants.Key matches any swap key (vanilla E + custom). */
+    public static boolean isSwapKey(InputConstants.Key key) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.options == null) return false;
+        if (keysMatch(key, mc.options.keyInventory.getKey())) return true;
+        if (!CUSTOM_SWAP_KEY_1.isUnbound() && keysMatch(key, CUSTOM_SWAP_KEY_1.getKey())) return true;
+        if (!CUSTOM_SWAP_KEY_2.isUnbound() && keysMatch(key, CUSTOM_SWAP_KEY_2.getKey())) return true;
+        return false;
+    }
+
+    private static boolean keysMatch(InputConstants.Key a, InputConstants.Key b) {
+        return a.getType() == b.getType() && a.getValue() == b.getValue();
+    }
+
+    private static boolean isAnySwapKeyDown(Minecraft mc) {
+        return isInventoryKeyPhysicallyDown(mc)
+                || isCustomKeyDown(mc, CUSTOM_SWAP_KEY_1)
+                || isCustomKeyDown(mc, CUSTOM_SWAP_KEY_2);
+    }
+
+    private static boolean isCustomKeyDown(Minecraft mc, KeyMapping km) {
+        if (km.isUnbound()) return false;
+        InputConstants.Key key = km.getKey();
+        if (key.getType() != InputConstants.Type.KEYSYM) return false;
+        return GLFW.glfwGetKey(mc.getWindow().getWindow(), key.getValue()) == GLFW.GLFW_PRESS;
+    }
+
     private static boolean isInventoryKeyPhysicallyDown(Minecraft mc) {
         InputConstants.Key key = mc.options.keyInventory.getKey();
         if (key.getType() != InputConstants.Type.KEYSYM) return false;
@@ -411,6 +453,12 @@ public class InstantSwapClient {
         if (SWAP_IN_GUI_KEY.isUnbound()) return false;
         InputConstants.Key bk = SWAP_IN_GUI_KEY.getKey();
         return bk.getType() == InputConstants.Type.KEYSYM && event.getKey() == bk.getValue();
+    }
+
+    private static boolean isCustomKeyEvent(KeyMapping km, InputEvent.Key event) {
+        if (km.isUnbound()) return false;
+        InputConstants.Key ck = km.getKey();
+        return ck.getType() == InputConstants.Type.KEYSYM && event.getKey() == ck.getValue();
     }
 
     private static boolean hasEditBoxFocus(Screen s) {
