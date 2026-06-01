@@ -4,6 +4,7 @@ import com.susinstantswap.client.InstantSwapClient;
 import com.susinstantswap.config.SwapConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -82,7 +83,7 @@ public class SwapConfigScreen extends Screen {
     }
 
     private void addThreshold(int cx, int y) {
-        this.addRenderableWidget(new ThresholdButton(cx, y, ROW_W, ROW_H, cfg));
+        this.addRenderableWidget(new HoldThresholdSlider(cx, y, ROW_W, ROW_H, cfg));
     }
 
     private static MutableComponent buttonText(String key, boolean on) {
@@ -118,35 +119,64 @@ public class SwapConfigScreen extends Screen {
         }
     }
 
-    private static class ThresholdButton extends VanillaButton {
-        private static final int MIN = 50, MAX = 1000, STEP = 50;
+    /** Slider with value text rendered inside, vanilla-style. */
+    private static class HoldThresholdSlider extends AbstractWidget {
+        private static final int MIN = 50, MAX = 1000;
         private final SwapConfig cfg;
+        private double sliderValue;
 
-        ThresholdButton(int x, int y, int w, int h, SwapConfig cfg) {
-            super(x, y, w, h, Component.empty(), b -> {});
+        HoldThresholdSlider(int x, int y, int w, int h, SwapConfig cfg) {
+            super(x, y, w, h, Component.empty());
             this.cfg = cfg;
+            this.sliderValue = clamp((double) (cfg.holdThresholdMs - MIN) / (MAX - MIN));
             updateMessage();
         }
 
         private void updateMessage() {
+            int ms = (int) (MIN + sliderValue * (MAX - MIN));
             setMessage(Component.translatable("config.susinstantswap.holdThresholdMs")
-                    .append(Component.literal(": " + cfg.holdThresholdMs + "ms")));
+                    .append(Component.literal(": " + ms + "ms")));
         }
 
         @Override
-        public boolean mouseClicked(double mx, double my, int button) {
-            if (this.active && this.visible && this.clicked(mx, my)) {
-                if (button == 0) {
-                    cfg.holdThresholdMs = Math.min(MAX, cfg.holdThresholdMs + STEP);
-                } else if (button == 1) {
-                    cfg.holdThresholdMs = Math.max(MIN, cfg.holdThresholdMs - STEP);
-                }
-                cfg.save();
-                updateMessage();
-                this.playDownSound(Minecraft.getInstance().getSoundManager());
-                return true;
-            }
-            return false;
+        protected void renderWidget(GuiGraphics g, int mx, int my, float delta) {
+            Minecraft mc = Minecraft.getInstance();
+            int x = this.getX(), y = this.getY(), w = this.width, h = this.height;
+            int v = this.isHoveredOrFocused() ? 86 : 46;
+
+            // Background: vanilla button look via blitNineSliced
+            g.blitNineSliced(AbstractWidget.WIDGETS_LOCATION, x, y, w, h, 2, 0, v, 200, 20);
+
+            // Track
+            int tx = x + 4, ty = y + h / 2 - 1, tw = w - 8;
+            g.fill(tx, ty, tx + tw, ty + 2, 0xFF000000);
+            g.fill(tx + 1, ty + 1, tx + tw - 1, ty + 2, 0xFF555555);
+
+            // Handle
+            int hx = tx + (int) (sliderValue * (tw - 8));
+            g.fill(hx, y + 2, hx + 8, y + h - 2, 0xFFAAAAAA);
+            g.fill(hx + 1, y + 2, hx + 7, y + 3, 0xFFFFFFFF);
+            g.fill(hx + 1, y + 2, hx + 2, y + h - 2, 0xFFFFFFFF);
+            g.fill(hx + 1, y + h - 4, hx + 7, y + h - 3, 0xFF666666);
+            g.fill(hx + 6, y + 2, hx + 7, y + h - 2, 0xFF666666);
+
+            // Text centered on top
+            int textColor = this.isHoveredOrFocused() ? 0xFFFFA0 : 0xE0E0E0;
+            g.drawCenteredString(mc.font, this.getMessage(), x + w / 2, y + (h - 8) / 2, textColor);
         }
+
+        @Override public void onClick(double mx, double my) { setValueFromMouse(mx); }
+        @Override protected void onDrag(double mx, double my, double dx, double dy) { setValueFromMouse(mx); }
+
+        private void setValueFromMouse(double mx) {
+            this.sliderValue = clamp((mx - (this.getX() + 8)) / (this.width - 16));
+            cfg.holdThresholdMs = (int) (MIN + sliderValue * (MAX - MIN));
+            cfg.save();
+            updateMessage();
+        }
+
+        private static double clamp(double v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+        @Override protected boolean isValidClickButton(int b) { return b == 0; }
+        @Override public void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput e) { this.defaultButtonNarrationText(e); }
     }
 }
