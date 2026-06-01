@@ -6,14 +6,16 @@ import com.susinstantswap.config.SwapConfig;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.ChatScreen;
-import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.sounds.SoundEvents;
@@ -21,713 +23,569 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.GameType;
+import net.minecraft.world.entity.EquipmentSlot;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
+
+import com.susinstantswap.mixin.AbstractContainerScreenAccessor;
+import com.susinstantswap.mixin.KeyMappingAccessor;
 
 /**
- * Sus-InstantSwap Fabric 1.20.1 客户端逻辑。
+ * Sus-InstantSwap v2.0.0 — Fabric edition.
+ * Core swap logic ported from NeoForge 1.21.1 baseline, adapted for 1.20.1.
  *
- * 从 NeoForge 1.21 v1.1.0 直接迁移，适配 Fabric API 差异：
- *   - InputEvent.Key         → 边缘检测 (prevDown + SWAP_KEY.isDown() + GLFW轮询)
- *   - RegisterKeyMappingsEvent → KeyBindingHelper.registerKeyBinding
- *   - containerScreen.leftPos → 反射 getDeclaredField（Loom remap 安全）
- *   - getSlotUnderMouse()    → 反射 hoveredSlot（Loom remap 安全）
- *   - SlotWrapper instanceof → unwrapSlot() 通用解包（remap 安全）
- *   - CONTAINER 常量比较      → isPlayerInventorySlot()（remap 安全）
+ * <p>Uses Fabric API callbacks instead of NeoForge event bus,
+ * Accessor mixins instead of Access Transformers, and reflection
+ * for private CreativeModeInventoryScreen internals.</p>
  */
 public class InstantSwapClient {
 
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static KeyMapping SWAP_KEY;
     private static KeyMapping SWAP_IN_GUI_KEY;
     private static SwapConfig config;
 
-    // ── 状态机：与 NF 1.21 完全一致 ──
-    enum SwapState { IDLE, OPEN }
+    enum SwapState { IDLE, WATCHING, LONG_PRESS }
     private static SwapState state = SwapState.IDLE;
-    private static long pressStartTime;
-    private static boolean longPressConfirmed;
 
-    // ── 边缘检测（替代 NF 的 InputEvent.Key）──
-    private static boolean prevDown;
-    private static boolean prevGuiSwapDown;
+    private static boolean configLogged = false;
 
-    private static boolean configLogged;
-    private static boolean inMenuContext = false;
-
-    // ── tooltip 抑制（鼠标重定位时防止闪现）──
+    // ── Tooltip suppression after cursor reposition ──
     private static boolean suppressNextTooltip;
     private static int suppressTooltipFrames;
+    private static Screen lastTooltipSuppressScreen;
 
-    // ── 反射缓存 ──
-    private static Field hoveredSlotField;
-    private static boolean hoveredSlotResolved;
+    // ── Right-click container tracking ──
+    // Only reposition cursor when container was opened via right-click
+    // (not via keybind — Curios, cosmetic armor, etc.).
+    private static boolean screenOpenedByInteract;
 
-    // ── 改键支持：saveString() + InputConstants.getKey() ──
-    // 使用 MC 公开 API 读取运行时绑定键，避免反射的兼容性风险。
-    // KeyMapping.saveString() 返回当前绑定键的名称 (如 "key.keyboard.r")，
-    // InputConstants.getKey() 将其解析回 InputConstants.Key 对象。
-    private static boolean boundKeyLogged;
-
-    // ═══════════════════════════════════════════════════════════
-    // 初始化（端口：NF SusInstantSwapMod → Fabric ClientModInitializer）
-    // ═══════════════════════════════════════════════════════════
-
-    public static void init() {
-        LOGGER.info("[SusInstantSwap] v1.3.0 初始化客户端交换逻辑 (Fabric 1.20.1)...");
-        config = SwapConfig.get();
-
-        SWAP_KEY = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-                "key.susinstantswap.swap",
-                InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT,
-                "key.categories.susinstantswap"
-        ));
-
-        SWAP_IN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-                "key.susinstantswap.swap_in_gui",
-                InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(),
-                "key.categories.susinstantswap"
-        ));
-
-        ClientTickEvents.END_CLIENT_TICK.register(InstantSwapClient::onClientTick);
-        LOGGER.info("[SusInstantSwap] 按键绑定和 Tick 事件已注册");
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // 每帧 Tick（合并 NF 的 ClientTickEvent.Post + InputEvent.Key）
-    // ═══════════════════════════════════════════════════════════
-
-    private static void onClientTick(Minecraft mc) {
-        if (mc.player == null) {
-            inMenuContext = false;
-        } else if (mc.screen instanceof PauseScreen) {
-            inMenuContext = true;
-        } else if (mc.screen == null) {
-            inMenuContext = false;
-        }
-
-        // ── tooltip 抑制帧计数 ──
-        if (suppressTooltipFrames > 0) {
-            suppressTooltipFrames--;
-            if (suppressTooltipFrames == 0) {
-                suppressNextTooltip = false;
-            }
-        }
-
-        // ── 首次日志 ──
-        if (!configLogged) {
-            configLogged = true;
-            LOGGER.info("[SusInstantSwap] 配置: longPressMode={}, holdThresholdMs={}, soundEnabled={}, guiSwapEnabled={}, emptySlotSwapEnabled={}, mouseReposition={}, debug={}",
-                    config.longPressMode, config.holdThresholdMs, config.soundEnabled, config.guiSwapEnabled, config.emptySlotSwapEnabled, config.mouseReposition, config.debug);
-        }
-
-        // ── 早期退出 ──
-        if (mc.player == null || mc.gameMode == null) {
-            state = SwapState.IDLE;
-            prevDown = false;
-            prevGuiSwapDown = false;
-            return;
-        }
-
-        boolean creative = mc.gameMode.hasInfiniteItems();
-        boolean down = isSwapKeyDown();
-
-        boolean pressed = down && !prevDown;
-        boolean released = !down && prevDown;
-        prevDown = down;
-
-        // ── GUI 交换检测 ──
-        if (config.guiSwapEnabled) {
-            boolean triggerGuiSwap = false;
-            if (!SWAP_IN_GUI_KEY.isUnbound()) {
-                boolean guiDown = isGuiSwapKeyDown();
-                triggerGuiSwap = guiDown && !prevGuiSwapDown;
-                prevGuiSwapDown = guiDown;
-            } else if (pressed) {
-                triggerGuiSwap = true;
-            }
-            if (triggerGuiSwap && mc.screen instanceof AbstractContainerScreen) {
-                if (performGuiSwap(mc, creative)) {
-                    debugLog("GUI 交换完成");
-                    state = SwapState.IDLE;
-                    mc.player.closeContainer();
-                    prevDown = isSwapKeyDown();
-                    return;
-                }
-            }
-            if (triggerGuiSwap && SWAP_KEY.isUnbound() && !pressed) {
-                return;
-            }
-        }
-
-        if (pressed) {
-            handleKeyPress(mc, creative);
-        }
-        if (released) {
-            handleKeyRelease(mc, creative);
-        }
-
-        if (state == SwapState.OPEN) {
-            handleOpenTick(mc, creative);
-        }
-    }
-
-    // ── NF InputEvent.Key PRESS 端口 ──
-
-    private static void handleKeyPress(Minecraft mc, boolean creative) {
-        if (mc.screen != null && mc.screen.getFocused() instanceof EditBox) {
-            if (SWAP_KEY.same(mc.options.keyInventory)) {
-                while (mc.options.keyInventory.consumeClick()) { }
-            }
-            return;
-        }
-        if (state != SwapState.IDLE) return;
-        if (!canInteract(mc)) return;
-        if (mc.screen != null && isExcludedScreen(mc.screen)) { return; }
-
-        // 有界面打开 → 模拟原版物品栏键（E键）行为
-        if (mc.screen != null) {
-            // 排除聊天和暂停界面（不应被干扰）
-            if (isExcludedScreen(mc.screen)) {
-                return;
-            }
-            simulateVanillaInventoryKey(mc);
-            debugLog("按键按下 → 模拟原版E键");
-            return;
-        }
-
-        // ── 游戏中：打开物品栏，进入 OPEN 状态 ──
-        openInventoryAndPositionCursor(mc, creative);
-        state = SwapState.OPEN;
-        pressStartTime = System.currentTimeMillis();
-        longPressConfirmed = false;
-        debugLog("按键按下→打开" + (creative ? "创造模式" : "生存模式") + "物品栏");
-    }
-
-    // ── NF InputEvent.Key RELEASE 端口 ──
-
-    private static void handleKeyRelease(Minecraft mc, boolean creative) {
-        if (state != SwapState.OPEN) return;
-
-        long elapsed = System.currentTimeMillis() - pressStartTime;
-
-        if (!config.longPressMode || elapsed >= config.holdThresholdMs) {
-            // 经典模式：松手即交换
-            // 长按模式 + 达到阈值：长按交换
-            performSwapAndClose(mc, creative);
-            debugLog("松手→交换完成 (" + elapsed + "ms)");
-        }
-        // 长按模式 + 未达阈值：物品栏保持打开（由下一个按键关闭）
-        state = SwapState.IDLE;
-    }
-
-    // ── NF ClientTickEvent.Post 端口（OPEN 状态下的 Tick 操作）──
-
-    private static void handleOpenTick(Minecraft mc, boolean creative) {
-        // 外部关闭（ESC/死亡等）
-        if (mc.screen == null) {
-            debugLog("外部关闭→重置状态");
-            state = SwapState.IDLE;
-            return;
-        }
-
-        if (!config.longPressMode) {
-            // 经典模式：OPEN 状态下不做额外操作
-            // 键盘状态由 GLFW 轮询的边缘检测处理，无需额外兜底
-            return;
-        }
-
-        // ── 长按模式：阈值追踪 ──
-        long elapsed = System.currentTimeMillis() - pressStartTime;
-
-        // 达到阈值 → 标记确认（对齐 NF：不在此处交换，等松手）
-        if (elapsed >= config.holdThresholdMs && isSwapKeyDown()) {
-            longPressConfirmed = true;
-        }
-
-        // 键已物理松开 → 判定是否长按交换
-        if (!isSwapKeyDown()) {
-            if (longPressConfirmed) {
-                performSwapAndClose(mc, creative);
-                debugLog("长按交换完成（Tick检测，" + elapsed + "ms）");
-            }
-            state = SwapState.IDLE;
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // 工具方法
-    // ═══════════════════════════════════════════════════════════
-
-    /**
-     * 模拟原版物品栏键（E键）行为。
-     * 先让当前屏幕处理按键（如 EMI 配方界面会在此关闭自己并返回物品栏），
-     * 如果屏幕未消费按键，则关闭容器/物品栏。
-     */
-    private static void simulateVanillaInventoryKey(Minecraft mc) {
-        Screen prevScreen = mc.screen;
-        mc.screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
-        if (mc.screen != prevScreen) {
-            return;
-        }
-        mc.setScreen(null);
-    }
-
-        private static boolean isExcludedScreen(Screen screen) {
-        if (screen instanceof ChatScreen) return true;
-        return inMenuContext;
-    }
-
-    private static boolean canInteract(Minecraft mc) {
-        GameType mode = mc.gameMode.getPlayerMode();
-        return mode == GameType.SURVIVAL || mode == GameType.CREATIVE || mode == GameType.ADVENTURE;
-    }
-
-    private static Screen createInventoryScreen(Minecraft mc, boolean creative) {
-        if (creative) {
-            return new CreativeModeInventoryScreen(
-                    mc.player, mc.player.connection.enabledFeatures(), false);
-        }
-        return new InventoryScreen(mc.player);
-    }
-
-    /**
-     * 读取 KeyMapping 的实际运行时绑定键（尊重改键）。
-     *
-     * 使用 MC 公开 API，完全不用反射：
-     *   KeyMapping.saveString() → 当前绑定键名 (如 "key.keyboard.r")
-     *   InputConstants.getKey() → 解析回 InputConstants.Key 对象
-     *
-     * 若解析失败（极端情况），降级到 getDefaultKey()（始终为默认键）。
-     */
-    private static InputConstants.Key getBoundKey() {
-        try {
-            String keyName = SWAP_KEY.saveString();
-            InputConstants.Key result = InputConstants.getKey(keyName);
-            // 首次输出，方便在日志中确认改键是否生效
-            if (!boundKeyLogged) {
-                boundKeyLogged = true;
-                LOGGER.info("[SusInstantSwap] 当前绑定键: {} (默认: {})",
-                        keyName, SWAP_KEY.getDefaultKey().getName());
-            }
-            return result;
-        } catch (Exception e) {
-            LOGGER.warn("[SusInstantSwap] getBoundKey 解析失败: {}", e.getMessage());
-            return SWAP_KEY.getDefaultKey();
-        }
-    }
-
-    /**
-     * 检测交换键是否当前按下（支持改键 + OS 拦截兜底）。
-     *
-     * 两层检测：
-     *   1. SWAP_KEY.isDown() — Fabric 标准 API
-     *      Fabric 会 hook 键盘输入来更新 KeyMapping 内部状态，
-     *      对于非修饰键（R/F/G 等）准确可靠。
-     *   2. GLFW 物理轮询 — OS 拦截兜底
-     *      Windows 的 Alt 键会被 OS 拦截（菜单栏激活），
-     *      导致 Fabric/GLFW 不产生按键事件，isDown() 返回 false。
-     *      此时直接用 GLFW 读物理键盘状态。
-     */
-    private static boolean isSwapKeyDown() {
-        if (SWAP_KEY == null) return false;
-
-        // 第1层：Fabric KeyMapping.isDown() — 标准改键检测
-        if (SWAP_KEY.isDown()) return true;
-
-        // 第2层：GLFW 物理轮询 — 处理 OS 拦截修饰键（如 Windows Alt）
+    /** Called by TooltipMixin to check whether the current tooltip should be hidden. */
+    public static boolean shouldSuppressTooltip() {
+        if (!suppressNextTooltip) return false;
+        // Only suppress on the same screen the reposition happened on;
+        // if the screen changed (e.g. inventory closed), let tooltips through.
         Minecraft mc = Minecraft.getInstance();
-        long handle = mc.getWindow().getWindow();
-        InputConstants.Key key = getBoundKey();
-        if (key.getType() == InputConstants.Type.MOUSE) {
-            return GLFW.glfwGetMouseButton(handle, key.getValue()) == GLFW.GLFW_PRESS;
-        }
-        return InputConstants.isKeyDown(handle, key.getValue());
-    }
-
-    /** 读取 GUI 交换键的运行时绑定键 */
-    private static InputConstants.Key getGuiBoundKey() {
-        try {
-            return InputConstants.getKey(SWAP_IN_GUI_KEY.saveString());
-        } catch (Exception e) {
-            return SWAP_IN_GUI_KEY.getDefaultKey();
-        }
-    }
-
-    /** 检测 GUI 交换键是否按下（同 isSwapKeyDown 的双保险逻辑）。 */
-    private static boolean isGuiSwapKeyDown() {
-        if (SWAP_IN_GUI_KEY == null) return false;
-        if (SWAP_IN_GUI_KEY.isDown()) return true;
-        Minecraft mc = Minecraft.getInstance();
-        long handle = mc.getWindow().getWindow();
-        InputConstants.Key key = getGuiBoundKey();
-        if (key.getType() == InputConstants.Type.MOUSE) {
-            return GLFW.glfwGetMouseButton(handle, key.getValue()) == GLFW.GLFW_PRESS;
-        }
-        return InputConstants.isKeyDown(handle, key.getValue());
-    }
-    // ═══════════════════════════════════════════════════════════
-    // GUI 交换
-    // ═══════════════════════════════════════════════════════════
-
-    private static boolean performGuiSwap(Minecraft mc, boolean creative) {
-        if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
-
-        Slot hovered = getHoveredSlot(screen);
-        if (hovered == null || (!hovered.hasItem() && !config.emptySlotSwapEnabled)) {
-            debugLog("GUI交换: 悬停槽位无物品");
+        if (mc.screen != lastTooltipSuppressScreen) {
+            suppressNextTooltip = false;
+            suppressTooltipFrames = 0;
             return false;
         }
-
-        int hoveredIndex = hovered.index;
-        int selectedHotbar = mc.player.getInventory().selected;
-
-        if (screen instanceof CreativeModeInventoryScreen) {
-            if (!creative) return false;
-            if (performGuiCreativeSwap(mc, (CreativeModeInventoryScreen) screen)) {
-                playSwapSound(mc);
-                return true;
-            }
-            return false;
-        }
-
-        if (screen instanceof InventoryScreen) {
-            int hotbarMenuSlot = selectedHotbar + 36;
-            if (!isAllowedMenuSlot(hoveredIndex) || hoveredIndex == hotbarMenuSlot) {
-                return false;
-            }
-            if (performGuiContainerSwap(screen, hoveredIndex, selectedHotbar)) {
-                playSwapSound(mc);
-                debugLog("GUI交换: 槽位" + hoveredIndex + " <-> 快捷栏" + selectedHotbar);
-                return true;
-            }
-            return false;
-        }
-
-        return false;
-    }
-
-    private static boolean performGuiContainerSwap(AbstractContainerScreen<?> screen, int slotIndex, int hotbar) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.getConnection() == null) return false;
-
-        int containerId = screen.getMenu().containerId;
-        int stateId = screen.getMenu().getStateId();
-        Int2ObjectOpenHashMap<ItemStack> changed = new Int2ObjectOpenHashMap<>();
-        ServerboundContainerClickPacket packet = new ServerboundContainerClickPacket(
-                containerId, stateId, slotIndex, hotbar,
-                ClickType.SWAP, ItemStack.EMPTY, changed);
-        mc.getConnection().send(packet);
+        suppressNextTooltip = false;
         return true;
     }
 
-    private static boolean performGuiCreativeSwap(Minecraft mc, CreativeModeInventoryScreen screen) {
-        if (mc.player == null || mc.gameMode == null) return false;
+    // ── Reflection cache for CreativeModeInventoryScreen internals ──
+    private static Object CREATIVE_CONTAINER;
+    private static boolean creativeContainerInit;
 
-        Slot hovered = getHoveredSlot(screen);
-        if (hovered == null || (!hovered.hasItem() && !config.emptySlotSwapEnabled)) return false;
+    // ── Init ──
 
-        int selected = mc.player.getInventory().selected;
-        int heldSlotIndex = selected + 36;
+    /** Returns the shared config instance, for use by config screens. */
+    public static SwapConfig getConfig() { return config; }
 
-        if (!isPlayerInventorySlot(hovered, mc)) {
-            ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
-            if (!heldItem.isEmpty()) {
-                int freeSlot = findFreeBackpackSlot(mc);
-                if (freeSlot >= 0) {
-                    mc.gameMode.handleCreativeModeItemAdd(heldItem, freeSlot);
+    public static void init(SwapConfig cfg) {
+        config = cfg;
+        SWAP_IN_GUI_KEY = new KeyMapping("key.susinstantswap.swap_in_gui",
+                InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(),
+                "key.categories.susinstantswap");
+        KeyBindingHelper.registerKeyBinding(SWAP_IN_GUI_KEY);
+
+        ClientTickEvents.END_CLIENT_TICK.register(InstantSwapClient::onClientTick);
+        ScreenEvents.AFTER_INIT.register(InstantSwapClient::onScreenInitPost);
+
+        // Track right-click interactions to distinguish keybind-opened
+        // containers (Curios, cosmetic armor, etc.) from player-opened ones.
+        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+            screenOpenedByInteract = true;
+            return InteractionResult.PASS;
+        });
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            screenOpenedByInteract = true;
+            return InteractionResult.PASS;
+        });
+    }
+
+    // ── Screen init: reposition cursor ──
+
+    private static void onScreenInitPost(Minecraft mc, Screen screen, int scaledWidth, int scaledHeight) {
+        if (!config.mouseReposition) return;
+        if (!(screen instanceof AbstractContainerScreen<?> s)) return;
+        if (s instanceof InventoryScreen || s instanceof CreativeModeInventoryScreen) return;
+        // Only reposition when the container was opened via right-click
+        // (not via keybind — Curios, cosmetic armor, etc.)
+        if (!screenOpenedByInteract) return;
+        screenOpenedByInteract = false;
+        positionCursorToUIBottomRight(s);
+    }
+
+    // ── Per-tick ──
+
+    private static void onClientTick(Minecraft mc) {
+        if (suppressTooltipFrames > 0 && --suppressTooltipFrames == 0)
+            suppressNextTooltip = false;
+
+        if (!configLogged) {
+            configLogged = true;
+            LOGGER.info("[SusInstantSwap] Config: mod={} threshold={}ms sound={} guiSwap={} emptySwap={} debug={} mouse={}",
+                    config.modEnabled, config.holdThresholdMs, config.soundEnabled,
+                    config.guiSwapEnabled, config.emptySlotSwapEnabled,
+                    config.debug, config.mouseReposition);
+        }
+
+        // Sync master switch to shared state (read by mixins)
+        SwapKeyState.modEnabled = config.modEnabled;
+        if (!SwapKeyState.modEnabled) return;
+
+        if (mc.player == null || mc.gameMode == null) {
+            state = SwapState.IDLE;
+            SwapKeyState.closePendingTicks = 0;
+            return;
+        }
+
+        // Deferred close — gives server a tick to sync after swap
+        if (SwapKeyState.closePendingTicks > 0) {
+            SwapKeyState.closePendingTicks--;
+            if (SwapKeyState.closePendingTicks == 0) {
+                if (mc.screen instanceof AbstractContainerScreen) {
+                    debugLog("deferred close");
+                    mc.player.closeContainer();
                 }
             }
-            ItemStack item = hovered.getItem().copyWithCount(1);
-            mc.gameMode.handleCreativeModeItemAdd(item, heldSlotIndex);
-            return true;
+            state = SwapState.IDLE;
         }
 
-        Slot realSlot = unwrapSlot(hovered);
-        int realIndex = (realSlot != null) ? realSlot.index : hovered.index;
-
-        if (realIndex >= 9 && realIndex <= 44 && realIndex != heldSlotIndex) {
-            ItemStack targetItem = mc.player.inventoryMenu.getSlot(realIndex).getItem().copy();
-            ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
-            mc.gameMode.handleCreativeModeItemAdd(targetItem, heldSlotIndex);
-            if (!heldItem.isEmpty()) {
-                mc.gameMode.handleCreativeModeItemAdd(heldItem, realIndex);
+        // ── IDLE: wait for screen to open after E press ──
+        if (state == SwapState.IDLE) {
+            if (SwapKeyState.inventoryKeyHeld && !SwapKeyState.longPressConfirmed) {
+                if (mc.screen instanceof AbstractContainerScreen) {
+                    SwapKeyState.pressStartNanos = System.nanoTime();
+                    state = SwapState.WATCHING;
+                    debugLog("WATCHING");
+                }
             }
-            return true;
+            return;
         }
 
-        // 快捷栏内部交换：getContainerSlot() 返回 0-8
-        int containerSlot = hovered.getContainerSlot();
-        if (containerSlot >= 0 && containerSlot <= 8 && containerSlot != selected) {
-            int hotbarMenuSlot = containerSlot + 36;
-            ItemStack hotbarItem = mc.player.getInventory().getItem(containerSlot).copy();
-            ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
-            mc.gameMode.handleCreativeModeItemAdd(hotbarItem, heldSlotIndex);
-            mc.gameMode.handleCreativeModeItemAdd(heldItem, hotbarMenuSlot);
-            return true;
+        // ── WATCHING: check threshold ──
+        if (state == SwapState.WATCHING) {
+            if (mc.screen == null) { state = SwapState.IDLE; return; }
+            if (!isInventoryKeyPhysicallyDown(mc)) {
+                // Key released before threshold — abort.
+                state = SwapState.IDLE;
+                return;
+            }
+            if ((System.nanoTime() - SwapKeyState.pressStartNanos)
+                    >= config.holdThresholdMs * 1_000_000L) {
+                SwapKeyState.longPressConfirmed = true;
+                state = SwapState.LONG_PRESS;
+                debugLog("LONG_PRESS");
+            }
+            return;
+        }
+
+        // ── LONG_PRESS → release triggers swap ──
+        if (state == SwapState.LONG_PRESS) {
+            if (mc.screen == null) { state = SwapState.IDLE; return; }
+            if (!isInventoryKeyPhysicallyDown(mc) || !SwapKeyState.inventoryKeyHeld) {
+                boolean swapped = performSwap(mc);
+                if (!swapped) {
+                    int closeDelay = (mc.screen instanceof AbstractContainerScreen<?> s && isVanillaInventory(s)) ? 1 : 2;
+                    SwapKeyState.closePendingTicks = closeDelay;
+                }
+                state = SwapState.IDLE;
+            }
+        }
+    }
+
+    // ── Keyboard input (called from KeyboardMixin) ──
+    // Returns true if the event should be cancelled (blocked from reaching KeyMapping.click).
+
+    public static boolean handleKeyInput(long window, int key, int scancode, int action, int modifiers) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.gameMode == null) return false;
+        if (!SwapKeyState.modEnabled) return false;
+
+        boolean keyDown = (action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT);
+        boolean isRelease = (action == GLFW.GLFW_RELEASE);
+        boolean isInventoryKey = isInventoryKeyByCode(mc, key);
+        boolean isGuiSwapKey = SWAP_IN_GUI_KEY.isUnbound() ? false : isGuiSwapKeyByCode(key);
+
+        // ── E key press/release tracking for long-press state machine ──
+        // Must track ALL E presses (even when no screen is open), matching
+        // NF's KeyClickMixin behavior. The E press that OPENS the inventory
+        // fires before mc.screen is set, so we can't gate on screen state.
+        if (isInventoryKey) {
+            if (keyDown && !SwapKeyState.inventoryKeyHeld) {
+                SwapKeyState.inventoryKeyHeld = true;
+                SwapKeyState.pressStartNanos = System.nanoTime();
+                SwapKeyState.longPressConfirmed = false;
+            } else if (keyDown && SwapKeyState.inventoryKeyHeld) {
+                // Repeat while held: block it
+                return true;
+            } else if (isRelease) {
+                SwapKeyState.inventoryKeyHeld = false;
+                SwapKeyState.longPressConfirmed = false;
+            }
+        }
+
+        // ── EditBox protection: consume click so swap keys don't close screen ──
+        if (keyDown && isInventoryKey && mc.screen != null && hasEditBoxFocus(mc.screen)) {
+            while (mc.options.keyInventory.consumeClick()) {}
+            if (mc.screen instanceof AbstractContainerScreen) {
+                if (mc.player.containerMenu.getSlot(0).hasItem()) return false;
+            } else return false;
+        }
+
+        // ── GUI swap ──
+        // GUI swap with bound custom key fires immediately.
+        // E-key fallback (unbound custom key) is handled in ScreenKeyMixin
+        // via tryPerformGuiSwap, which fires after the screen is open.
+        if (keyDown && config.guiSwapEnabled && isGuiSwapKey
+                && mc.screen instanceof AbstractContainerScreen) {
+            performSwap(mc);
         }
 
         return false;
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 鼠标重定位
-    // ═══════════════════════════════════════════════════════════
+    // ── GUI swap entry (from ScreenKeyMixin) ──
 
-    private static void openInventoryAndPositionCursor(Minecraft mc, boolean creative) {
-        Screen screen = createInventoryScreen(mc, creative);
-        if (config.mouseReposition) {
-            preMoveCursorToWindowCorner(mc);
-        }
-        mc.setScreen(screen);
-        if (config.mouseReposition) {
-            positionCursorToUIBottomRight(mc, screen);
-        }
+    public static boolean tryPerformGuiSwap(AbstractContainerScreen<?> screen) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.gameMode == null) return false;
+        if (!config.guiSwapEnabled || !SWAP_IN_GUI_KEY.isUnbound()) return false;
+        return performSwap(mc);
     }
 
-    private static void preMoveCursorToWindowCorner(Minecraft mc) {
-        long handle = mc.getWindow().getWindow();
-        GLFW.glfwSetCursorPos(handle, mc.getWindow().getWidth() - 10, mc.getWindow().getHeight() - 10);
-    }
+    // ── Unified swap (GUI + long press) ──
 
-    private static void positionCursorToUIBottomRight(Minecraft mc, Screen screen) {
-        if (!(screen instanceof AbstractContainerScreen<?>)) {
-            preMoveCursorToWindowCorner(mc);
-            return;
+    private static boolean performSwap(Minecraft mc) {
+        if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
+        Slot hs = ((AbstractContainerScreenAccessor) screen).getHoveredSlot();
+
+        // Fallback: CreativeModeInventoryScreen may not track hoveredSlot reliably
+        // for the item grid on the tab page. Manually find the slot under the mouse.
+        if (hs == null && screen instanceof CreativeModeInventoryScreen) {
+            AbstractContainerScreenAccessor acc = (AbstractContainerScreenAccessor) screen;
+            double mx = mc.mouseHandler.xpos();
+            double my = mc.mouseHandler.ypos();
+            for (Slot s : screen.getMenu().slots) {
+                if (s.isActive() && acc.invokeIsHovering(s, mx, my)) {
+                    hs = s;
+                    break;
+                }
+            }
         }
 
-        // 使用 Screen 公开的 width/height 字段（setScreen 后已由 init() 设置）
-        // 物品栏背景尺寸为 MC 常量：生存 176×166，创造 195×136
-        int imageW = (screen instanceof CreativeModeInventoryScreen) ? 195 : 176;
-        int imageH = (screen instanceof CreativeModeInventoryScreen) ? 136 : 166;
+        if (hs == null || (!hs.hasItem() && !config.emptySlotSwapEnabled)) return false;
 
-        // 物品栏 UI 居中，计算右下角在缩放坐标系中的位置
-        int guiRight = (screen.width + imageW) / 2;
-        int guiBottom = (screen.height + imageH) / 2;
+        int sel = mc.player.getInventory().selected;
 
-        long handle = mc.getWindow().getWindow();
-        double guiScale = mc.getWindow().getGuiScale();
-        GLFW.glfwSetCursorPos(handle,
-                (int) (guiRight * guiScale) - 4,
-                (int) (guiBottom * guiScale) - 4);
+        // Both slots empty → nothing to swap
+        if (!hs.hasItem() && mc.player.getInventory().getItem(sel).isEmpty()) return false;
 
-        suppressNextTooltip = true;
-        suppressTooltipFrames = 2;
+        // ── Creative inventory → special handling ──
+        if (screen instanceof CreativeModeInventoryScreen cs) {
+            if (creativeSwap(mc, cs, sel, hs)) { playSwapSound(mc); return true; }
+            return false;
+        }
+
+        // Player inventory → restrict to backpack + hotbar
+        if (screen instanceof InventoryScreen && (!isPlayerInventorySlot(hs) || hs.index == hotbarMenuSlot(sel)))
+            return false;
+
+        // Slot validation: hand item must fit the target slot
+        ItemStack hand = mc.player.getInventory().getItem(sel);
+        if (!hand.isEmpty() && !hs.mayPlace(hand)) return false;
+
+        int closeDelay = isVanillaInventory(screen) ? 1 : 2;
+
+        // All containers → ClickType.SWAP
+        if (containerSwap(screen, hs.index, sel)) {
+            playSwapSound(mc);
+            SwapKeyState.closePendingTicks = closeDelay;
+            return true;
+        }
+        return false;
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 悬停槽位反射（端口：NF 的 getSlotUnderMouse → 反射 hoveredSlot）
-    // ═══════════════════════════════════════════════════════════
+    private static boolean containerSwap(AbstractContainerScreen<?> s, int slotIdx, int hotbar) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getConnection() == null) return false;
+        Int2ObjectOpenHashMap<ItemStack> cs = new Int2ObjectOpenHashMap<>();
+        mc.getConnection().send(new ServerboundContainerClickPacket(
+                s.getMenu().containerId, s.getMenu().getStateId(), slotIdx, hotbar,
+                ClickType.SWAP, ItemStack.EMPTY, cs));
+        return true;
+    }
 
-    private static Slot getHoveredSlot(Screen screen) {
-        if (!(screen instanceof AbstractContainerScreen<?> cs)) return null;
+    // ── Creative mode swap (ported from NF v2.0.0) ──
 
-        if (!hoveredSlotResolved) {
-            hoveredSlotResolved = true;
-            for (String name : new String[]{"hoveredSlot", "focusedSlot"}) {
+    private static boolean creativeSwap(Minecraft mc, CreativeModeInventoryScreen cs, int sel, Slot hs) {
+        if (mc.gameMode == null) return false;
+
+        int hotbarSize = hotbarSize(mc);
+        int menuHotbarStart = 36;
+        int heldIdx = menuHotbarStart + sel;
+        ItemStack handStack = mc.player.getInventory().getItem(sel);
+        debugLog("creativeSwap ENTER: sel=" + sel + " hand=" + (handStack.isEmpty()?"EMPTY":handStack.getDisplayName().getString())
+                + " hs.container=" + (hs.container==getCreativeContainer()?"CONTAINER":hs.container==mc.player.getInventory()?"PLAYER_INV":
+                  isSlotWrapper(hs)?"SlotWrapper("+getSlotWrapperTargetIndex(hs)+")":"OTHER")
+                + " hs.index=" + hs.index + " csi=" + hs.getContainerSlot());
+
+        Object creativeContainer = getCreativeContainer();
+        // CONTAINER branch: creative item grid slots.
+        // Primary check: compare with the static CONTAINER field (via reflection).
+        // Fallback: on the tab page, any non-player-inventory, non-SlotWrapper slot
+        // is a creative grid slot (no reflection needed).
+        boolean isContainerSlot = (creativeContainer != null && hs.container == creativeContainer)
+                || (!cs.isInventoryOpen() && !isPlayerInventorySlot(hs) && !isSlotWrapper(hs));
+        if (isContainerSlot) {
+            debugLog("  branch=CONTAINER");
+            ItemStack held = handStack.copy();
+            ItemStack item = hs.getItem().copyWithCount(1);
+            debugLog("  held=" + (held.isEmpty()?"EMPTY":held.getDisplayName().getString()) + " item=" + item.getDisplayName().getString());
+            if (!held.isEmpty()) {
+                int f = freeSlot(mc);
+                debugLog("  freeSlot=" + f);
+                if (f >= 0 && f < mc.player.getInventory().items.size()) {
+                    mc.player.getInventory().items.set(f, held.copy());
+                    mc.gameMode.handleCreativeModeItemAdd(held.copy(), menuHotbarStart + f);
+                    debugLog("  items.set(" + f + ",held) + addItem(" + (menuHotbarStart+f) + ")");
+                }
+            }
+            if (sel < mc.player.getInventory().items.size()) {
+                mc.player.getInventory().items.set(sel, item);
+                mc.gameMode.handleCreativeModeItemAdd(item, heldIdx);
+                debugLog("  items.set(" + sel + ",item) + addItem(" + heldIdx + ")");
+            }
+            SwapKeyState.closePendingTicks = 1;
+            return true;
+        }
+
+        // Creative equipment: csi=5-8 (armor) or 45 (offhand) — use native SWAP
+        // Only applies on the inventory/survival tab (not creative item tabs)
+        int csi = hs.getContainerSlot();
+        if (cs.isInventoryOpen() && (csi == 45 || (csi >= 5 && csi <= 8))) {
+            debugLog("  branch=CREATIVE_EQUIP csi=" + csi + " sel=" + sel);
+            // Slot type validation — reject items that don't fit the equipment slot
+            if (!handStack.isEmpty() && !hs.mayPlace(handStack)) {
+                debugLog("  mayPlace rejected -> false");
+                return false;
+            }
+            // Armor type validation
+            if (csi <= 8 && !handStack.isEmpty()) {
+                EquipmentSlot expected = csi == 5 ? EquipmentSlot.HEAD :
+                                        csi == 6 ? EquipmentSlot.CHEST :
+                                        csi == 7 ? EquipmentSlot.LEGS : EquipmentSlot.FEET;
+                EquipmentSlot actual = mc.player.getEquipmentSlotForItem(handStack);
+                if (!actual.isArmor() || actual != expected) {
+                    debugLog("  armor mismatch: expected=" + expected + " actual=" + actual + " -> false");
+                    return false;
+                }
+            }
+            mc.gameMode.handleInventoryMouseClick(
+                cs.getMenu().containerId, csi, sel, ClickType.SWAP, mc.player);
+            debugLog("  handleInventoryMouseClick(slot=" + csi + " hotbar=" + sel + " SWAP)");
+            SwapKeyState.closePendingTicks = 1;
+            return true;
+        }
+
+        // Player inventory slots on inventory page: backpack (9-35) + hotbar (36-44)
+        // Uses the same SWAP mechanism as equipment slots — native inventory click.
+        if (cs.isInventoryOpen() && isPlayerInventorySlot(hs) && csi != heldIdx) {
+            debugLog("  branch=PLAYER_INV csi=" + csi + " sel=" + sel);
+            if (!handStack.isEmpty() && !hs.mayPlace(handStack)) {
+                debugLog("  mayPlace rejected -> false");
+                return false;
+            }
+            mc.gameMode.handleInventoryMouseClick(
+                cs.getMenu().containerId, csi, sel, ClickType.SWAP, mc.player);
+            debugLog("  handleInventoryMouseClick(slot=" + csi + " hotbar=" + sel + " SWAP)");
+            SwapKeyState.closePendingTicks = 1;
+            return true;
+        }
+
+        // SlotWrapper — hotbar slots on creative item tabs (not inventory tab)
+        if (isSlotWrapper(hs)) {
+            int t = getSlotWrapperTargetIndex(hs);
+            debugLog("  branch=SlotWrapper t=" + t + " heldMenuIdx=" + heldIdx);
+            if (t >= 0 && isPlayerInventorySlot(hs) && t != heldIdx) {
+                ItemStack ti = cs.getMenu().getSlot(t).getItem().copy();
+                ItemStack hi = cs.getMenu().getSlot(heldIdx).getItem().copy();
+                int invIdx = t >= menuHotbarStart ? t - menuHotbarStart : t;
+                debugLog("  ti=" + ti.getDisplayName().getString() + " hi=" + hi.getDisplayName().getString() + " invIdx=" + invIdx);
+                safeSet(mc, sel, ti);
+                mc.gameMode.handleCreativeModeItemAdd(ti, heldIdx);
+                debugLog("  safeSet(" + sel + ",ti) + addItem(" + heldIdx + ")");
+                safeSet(mc, invIdx, hi);
+                mc.gameMode.handleCreativeModeItemAdd(hi, t);
+                debugLog("  safeSet(" + invIdx + ",hi) + addItem(" + t + ")");
+                SwapKeyState.closePendingTicks = 1;
+                return true;
+            }
+            debugLog("  SKIP: t<0=" + (t<0) + " isPlayerInv=" + isPlayerInventorySlot(hs) + " sameSlot=" + (t==heldIdx));
+            return false;
+        }
+
+        int c2 = hs.getContainerSlot();
+        debugLog("  branch=REGULAR c2=" + c2);
+        if (c2 >= 0 && c2 < hotbarSize && c2 != sel) {
+            ItemStack hi = handStack.copy();
+            ItemStack oi = mc.player.getInventory().getItem(c2).copy();
+            debugLog("  hi(hand->target)=" + (hi.isEmpty()?"EMPTY":hi.getDisplayName().getString()) + " oi(target->hotbar)=" + oi.getDisplayName().getString());
+            safeSet(mc, sel, oi);
+            mc.gameMode.handleCreativeModeItemAdd(oi, heldIdx);
+            debugLog("  safeSet(" + sel + ",oi) + addItem(" + heldIdx + ")");
+            safeSet(mc, c2, hi);
+            mc.gameMode.handleCreativeModeItemAdd(hi, menuHotbarStart + c2);
+            debugLog("  safeSet(" + c2 + ",hi) + addItem(" + (menuHotbarStart+c2) + ")");
+            SwapKeyState.closePendingTicks = 1;
+            return true;
+        }
+        debugLog("  NO MATCH -> false");
+        return false;
+    }
+
+    // ── Reflection helpers for CreativeModeInventoryScreen internals ──
+    // SlotWrapper detection — uses type-based field scanning instead of
+    // getDeclaredField("target") because Loom may not remap the string.
+    private static final java.util.Map<Class<?>, Field> targetFieldCache = new java.util.HashMap<>();
+
+    private static Object getCreativeContainer() {
+        if (!creativeContainerInit) {
+            creativeContainerInit = true;
+            try {
+                Field f = CreativeModeInventoryScreen.class.getDeclaredField("CONTAINER");
+                f.setAccessible(true);
+                CREATIVE_CONTAINER = f.get(null);
+            } catch (NoSuchFieldException e1) {
+                LOGGER.warn("[SusInstantSwap] CONTAINER not found by name, scanning by type...");
                 try {
-                    hoveredSlotField = AbstractContainerScreen.class.getDeclaredField(name);
-                    hoveredSlotField.setAccessible(true);
-                    LOGGER.info("[SusInstantSwap] hoveredSlot 字段: {}", name);
-                    break;
-                } catch (NoSuchFieldException ignored) {}
+                    for (Field f : CreativeModeInventoryScreen.class.getDeclaredFields()) {
+                        if (java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                                && net.minecraft.world.Container.class.isAssignableFrom(f.getType())) {
+                            f.setAccessible(true);
+                            CREATIVE_CONTAINER = f.get(null);
+                            LOGGER.info("[SusInstantSwap] Found CONTAINER via type: {}", f.getName());
+                            break;
+                        }
+                    }
+                } catch (Exception e2) {
+                    LOGGER.error("[SusInstantSwap] CONTAINER type scan failed", e2);
+                }
+            } catch (Exception e) {
+                LOGGER.error("[SusInstantSwap] CONTAINER access failed", e);
             }
-            if (hoveredSlotField == null) {
-                for (Field f : AbstractContainerScreen.class.getDeclaredFields()) {
-                    if (!Slot.class.isAssignableFrom(f.getType())) continue;
-                    if (Modifier.isStatic(f.getModifiers())) continue;
+        }
+        return CREATIVE_CONTAINER;
+    }
+
+    /** Find the Slot-typed 'target' field on a SlotWrapper by type (not name). */
+    private static Field findTargetField(Class<?> clz) {
+        return targetFieldCache.computeIfAbsent(clz, c -> {
+            for (Field f : c.getDeclaredFields()) {
+                if (f.getType() == Slot.class) {
                     f.setAccessible(true);
-                    hoveredSlotField = f;
-                    LOGGER.info("[SusInstantSwap] hoveredSlot 字段(类型匹配): {}", f.getName());
-                    break;
+                    return f;
                 }
             }
-        }
-        if (hoveredSlotField == null) return null;
-        try {
-            return (Slot) hoveredSlotField.get(cs);
-        } catch (Exception e) {
             return null;
-        }
+        });
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 交换执行
-    // ═══════════════════════════════════════════════════════════
-
-    private static void performSwapAndClose(Minecraft mc, boolean creative) {
-        if (creative) {
-            performCreativeSwap(mc);
-        } else {
-            performSurvivalSwap(mc);
-        }
-        if (mc.player != null) {
-            mc.player.closeContainer();
-        }
+    private static boolean isSlotWrapper(Slot slot) {
+        return findTargetField(slot.getClass()) != null;
     }
 
-    // ── 生存模式交换 ──
-
-    private static boolean isAllowedMenuSlot(int menuSlot) {
-        return menuSlot >= 9 && menuSlot <= 44;
-    }
-
-    private static void performSurvivalSwap(Minecraft mc) {
-        if (!(mc.screen instanceof InventoryScreen)) {
-            LOGGER.warn("[SusInstantSwap] 生存交换失败: 非物品栏屏幕");
-            return;
-        }
-
-        Slot hovered = getHoveredSlot(mc.screen);
-        if (hovered == null || (!hovered.hasItem() && !config.emptySlotSwapEnabled)) {
-            LOGGER.warn("[SusInstantSwap] 生存交换失败: 悬停槽位无物品");
-            return;
-        }
-
-        int slotIndex = hovered.index;
-        int hotbar = mc.player.getInventory().selected;
-        int hotbarMenuSlot = hotbar + 36;
-
-        if (!isAllowedMenuSlot(slotIndex) || slotIndex == hotbarMenuSlot) {
-            return;
-        }
-
-        int containerId = mc.player.inventoryMenu.containerId;
-        int stateId = mc.player.inventoryMenu.getStateId();
-        Int2ObjectOpenHashMap<ItemStack> changed = new Int2ObjectOpenHashMap<>();
-        ServerboundContainerClickPacket packet = new ServerboundContainerClickPacket(
-                containerId, stateId, slotIndex, hotbar,
-                ClickType.SWAP, ItemStack.EMPTY, changed);
-
-        if (mc.getConnection() != null) {
-            mc.getConnection().send(packet);
-            playSwapSound(mc);
-            LOGGER.info("[SusInstantSwap] 生存交换: 槽位{} <-> 快捷栏{}", slotIndex, hotbar);
-        }
-    }
-
-    // ── 创造模式交换 ──
-
-    /**
-     * 创造模式交换（端口：与 NF 1.21 行为完全一致，但使用 Fabric-安全的实现方式）。
-     *
-     * NF 1.21 使用：
-     *   hoveredSlot.container == CreativeModeInventoryScreen.CONTAINER  → 路径1
-     *   hoveredSlot instanceof CreativeModeInventoryScreen.SlotWrapper  → 路径2
-     *
-     * Fabric 适配（避免 Class.forName / private 内部类 remap 问题）：
-     *   isPlayerInventorySlot()  → 替代 CONTAINER 引用比较
-     *   unwrapSlot()             → 替代 SlotWrapper instanceof
-     */
-    private static void performCreativeSwap(Minecraft mc) {
-        if (!(mc.screen instanceof CreativeModeInventoryScreen)) {
-            LOGGER.warn("[SusInstantSwap] 创造交换失败: 非创造模式物品栏");
-            return;
-        }
-        if (mc.gameMode == null) {
-            LOGGER.warn("[SusInstantSwap] 创造交换失败: gameMode=null");
-            return;
-        }
-
-        Slot hovered = getHoveredSlot(mc.screen);
-        if (hovered == null || (!hovered.hasItem() && !config.emptySlotSwapEnabled)) {
-            LOGGER.warn("[SusInstantSwap] 创造交换失败: 悬停槽位无物品");
-            return;
-        }
-
-        int selected = mc.player.getInventory().selected;
-        int heldSlotIndex = selected + 36;
-        boolean didSwap = false;
-
-        // ── 路径A：创造标签页物品（不属于玩家背包）→ 拿取一个到快捷栏 ──
-        if (!isPlayerInventorySlot(hovered, mc)) {
-            // 先把手持物品移入背包空位
-            ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
-            if (!heldItem.isEmpty()) {
-                int freeSlot = findFreeBackpackSlot(mc);
-                if (freeSlot >= 0) {
-                    mc.gameMode.handleCreativeModeItemAdd(heldItem, freeSlot);
-                }
-            }
-            ItemStack item = hovered.getItem().copyWithCount(1);
-            mc.gameMode.handleCreativeModeItemAdd(item, heldSlotIndex);
-            didSwap = true;
-            LOGGER.info("[SusInstantSwap] 创造交换(标签页) -> 快捷栏{}", selected);
-            playSwapSound(mc);
-            return;
-        }
-
-        // ── 解包 SlotWrapper → 获取被包裹的真实槽位 ──
-        Slot realSlot = unwrapSlot(hovered);
-        int realIndex = (realSlot != null) ? realSlot.index : hovered.index;
-
-        // ── 路径B：玩家背包/快捷栏 → 双向交换 ──
-        if (realIndex >= 9 && realIndex <= 44 && realIndex != heldSlotIndex) {
-            ItemStack targetItem = mc.player.inventoryMenu.getSlot(realIndex).getItem().copy();
-            ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
-            mc.gameMode.handleCreativeModeItemAdd(targetItem, heldSlotIndex);
-            if (!heldItem.isEmpty()) {
-                mc.gameMode.handleCreativeModeItemAdd(heldItem, realIndex);
-            }
-            didSwap = true;
-            LOGGER.info("[SusInstantSwap] 创造交换(背包): {} <-> 快捷栏{}", realIndex, selected);
-        }
-
-        // 快捷栏内部交换：getContainerSlot() 返回 0-8
-        int containerSlot = hovered.getContainerSlot();
-        if (containerSlot >= 0 && containerSlot <= 8 && containerSlot != selected) {
-            int hotbarMenuSlot = containerSlot + 36;
-            ItemStack hotbarItem = mc.player.getInventory().getItem(containerSlot).copy();
-            ItemStack heldItem = mc.player.getInventory().getItem(selected).copy();
-            mc.gameMode.handleCreativeModeItemAdd(hotbarItem, heldSlotIndex);
-            mc.gameMode.handleCreativeModeItemAdd(heldItem, hotbarMenuSlot);
-            didSwap = true;
-        }
-
-        if (didSwap) {
-            playSwapSound(mc);
-        }
-    }
-
-    private static boolean isPlayerInventorySlot(Slot slot, Minecraft mc) {
-        return slot.container == mc.player.getInventory();
-    }
-
-    /**
-     * 通用 Slot 解包（remap 安全）。
-     * 遍历 slot 类中所有非 static 的 Slot 类型字段，返回被包装的真实槽位。
-     * 非包装类返回 null。
-     */
-    private static Slot unwrapSlot(Slot slot) {
-        if (slot.getClass() == Slot.class) return null;
+    private static int getSlotWrapperTargetIndex(Slot slot) {
         try {
-            for (Field field : slot.getClass().getDeclaredFields()) {
-                if (Slot.class.isAssignableFrom(field.getType())
-                        && !Modifier.isStatic(field.getModifiers())) {
-                    field.setAccessible(true);
-                    return (Slot) field.get(slot);
-                }
-            }
-        } catch (Exception ignored) {}
-        return null;
+            Field f = findTargetField(slot.getClass());
+            if (f == null) return -1;
+            Slot target = (Slot) f.get(slot);
+            return target != null ? target.index : -1;
+        } catch (Exception e) {
+            return -1;
+        }
     }
 
-    private static int findFreeBackpackSlot(Minecraft mc) {
-        for (int menuSlot = 9; menuSlot <= 35; menuSlot++) {
-            if (mc.player.inventoryMenu.getSlot(menuSlot).getItem().isEmpty()) {
-                return menuSlot;
-            }
-        }
+    // ── Utility ──
+
+    private static void safeSet(Minecraft mc, int idx, ItemStack stack) {
+        if (idx >= 0 && idx < mc.player.getInventory().items.size())
+            mc.player.getInventory().items.set(idx, stack);
+    }
+
+    private static boolean isPlayerInventorySlot(Slot slot) {
+        return slot.container == Minecraft.getInstance().player.getInventory();
+    }
+
+    private static boolean isVanillaInventory(AbstractContainerScreen<?> screen) {
+        return screen instanceof InventoryScreen || screen instanceof CreativeModeInventoryScreen;
+    }
+
+    private static int hotbarMenuSlot(int sel) {
+        return 36 + sel;
+    }
+
+    private static int hotbarSize(Minecraft mc) {
+        return mc.player.getInventory().items.size() - 27;
+    }
+
+    private static int freeSlot(Minecraft mc) {
+        int size = mc.player.getInventory().items.size();
+        int hbSize = hotbarSize(mc);
+        int sel = mc.player.getInventory().selected;
+        for (int i = 0; i < hbSize; i++)
+            if (i != sel && mc.player.getInventory().items.get(i).isEmpty()) return i;
+        for (int i = hbSize; i < size; i++)
+            if (mc.player.getInventory().items.get(i).isEmpty()) return i;
         return -1;
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 声音 & 调试
-    // ═══════════════════════════════════════════════════════════
+    // ── Key detection ──
+
+    private static boolean isInventoryKeyPhysicallyDown(Minecraft mc) {
+        InputConstants.Key key = ((KeyMappingAccessor) (Object) mc.options.keyInventory).getKey();
+        if (key.getType() != InputConstants.Type.KEYSYM) return false;
+        return GLFW.glfwGetKey(mc.getWindow().getWindow(), key.getValue()) == GLFW.GLFW_PRESS;
+    }
+
+    private static boolean isInventoryKeyByCode(Minecraft mc, int keyCode) {
+        InputConstants.Key ik = ((KeyMappingAccessor) (Object) mc.options.keyInventory).getKey();
+        return ik.getType() == InputConstants.Type.KEYSYM && ik.getValue() == keyCode;
+    }
+
+    private static boolean isGuiSwapKeyByCode(int keyCode) {
+        if (SWAP_IN_GUI_KEY.isUnbound()) return false;
+        InputConstants.Key bk = ((KeyMappingAccessor) (Object) SWAP_IN_GUI_KEY).getKey();
+        return bk.getType() == InputConstants.Type.KEYSYM && bk.getValue() == keyCode;
+    }
+
+    private static boolean hasEditBoxFocus(Screen s) {
+        if (s == null) return false;
+        if (s.getFocused() instanceof EditBox) return true;
+        for (var c : s.children()) if (c instanceof EditBox) return true;
+        String n = s.getClass().getName();
+        return n.contains("BookEdit") || n.contains("SignEdit");
+    }
+
+    // ── Mouse reposition ──
+
+    private static void positionCursorToUIBottomRight(AbstractContainerScreen<?> s) {
+        Minecraft mc = Minecraft.getInstance();
+        long h = mc.getWindow().getWindow();
+        double gs = mc.getWindow().getGuiScale();
+        AbstractContainerScreenAccessor acc = (AbstractContainerScreenAccessor) s;
+        GLFW.glfwSetCursorPos(h,
+                (int) ((acc.getLeftPos() + acc.getImageWidth()) * gs) - 5,
+                (int) ((acc.getTopPos() + acc.getImageHeight()) * gs) - 5);
+        suppressNextTooltip = true;
+        suppressTooltipFrames = 2;
+        lastTooltipSuppressScreen = s;
+    }
 
     private static void playSwapSound(Minecraft mc) {
         if (!config.soundEnabled || mc.player == null) return;
@@ -735,19 +593,6 @@ public class InstantSwapClient {
     }
 
     private static void debugLog(String msg) {
-        if (config.debug) {
-            LOGGER.info("[SusInstantSwap] {}", msg);
-        }
-    }
-
-    /** 由 Mixin 调用：检查当前帧是否需要抑制 tooltip */
-    public static boolean isSuppressNextTooltip() {
-        return suppressNextTooltip;
-    }
-
-    /** 由 Mixin 调用：消耗抑制标记 */
-    public static void consumeTooltipSuppress() {
-        suppressNextTooltip = false;
-        suppressTooltipFrames = 0;
+        if (config.debug) LOGGER.info("[SusInstantSwap] {}", msg);
     }
 }
