@@ -142,25 +142,29 @@ public class SwapConfigScreen extends Screen {
         protected void renderWidget(GuiGraphics g, int mx, int my, float delta) {
             Minecraft mc = Minecraft.getInstance();
             int x = this.getX(), y = this.getY(), w = this.width, h = this.height;
-            int v = this.isHoveredOrFocused() ? 86 : 46;
 
-            // Background: vanilla button look via blitNineSliced
-            g.blitNineSliced(AbstractWidget.WIDGETS_LOCATION, x, y, w, h, 2, 0, v, 200, 20);
+            // Background: vanilla Button-style box (1px border + fill + bevels)
+            g.fill(x, y, x + w, y + h, 0xFF000000);                       // outer border
+            g.fill(x + 1, y + 1, x + w - 1, y + h - 1, 0xFF3B3B3B);      // main fill
+            g.fill(x + 1, y + 1, x + w - 1, y + 2, 0xFFFFFFFF);          // top highlight
+            g.fill(x + 1, y + 1, x + 2, y + h - 1, 0xFFAAAAAA);          // left highlight
+            g.fill(x + 1, y + h - 2, x + w - 1, y + h - 1, 0xFF262626);  // bottom shadow
+            g.fill(x + w - 2, y + 1, x + w - 1, y + h - 1, 0xFF262626);  // right shadow
 
-            // Track
-            int tx = x + 4, ty = y + h / 2 - 1, tw = w - 8;
-            g.fill(tx, ty, tx + tw, ty + 2, 0xFF000000);
-            g.fill(tx + 1, ty + 1, tx + tw - 1, ty + 2, 0xFF555555);
+            // Track line
+            int tx = x + 6, ty = y + h / 2, tw = w - 12;
+            g.fill(tx, ty, tx + tw, ty + 1, 0xFF000000);
+            g.fill(tx + 1, ty, tx + tw - 1, ty + 1, 0xFF555555);
 
-            // Handle
+            // Handle (8x14 pixels, 3D bevel)
             int hx = tx + (int) (sliderValue * (tw - 8));
-            g.fill(hx, y + 2, hx + 8, y + h - 2, 0xFFAAAAAA);
-            g.fill(hx + 1, y + 2, hx + 7, y + 3, 0xFFFFFFFF);
-            g.fill(hx + 1, y + 2, hx + 2, y + h - 2, 0xFFFFFFFF);
-            g.fill(hx + 1, y + h - 4, hx + 7, y + h - 3, 0xFF666666);
-            g.fill(hx + 6, y + 2, hx + 7, y + h - 2, 0xFF666666);
+            g.fill(hx, y + 2, hx + 8, y + h - 2, 0xFF888888);
+            g.fill(hx + 1, y + 2, hx + 7, y + 3, 0xFFDDDDDD);
+            g.fill(hx + 1, y + 2, hx + 2, y + h - 2, 0xFFDDDDDD);
+            g.fill(hx + 1, y + h - 4, hx + 7, y + h - 3, 0xFF555555);
+            g.fill(hx + 6, y + 2, hx + 7, y + h - 2, 0xFF555555);
 
-            // Text centered on top
+            // Text centered over background
             int textColor = this.isHoveredOrFocused() ? 0xFFFFA0 : 0xE0E0E0;
             g.drawCenteredString(mc.font, this.getMessage(), x + w / 2, y + (h - 8) / 2, textColor);
         }
