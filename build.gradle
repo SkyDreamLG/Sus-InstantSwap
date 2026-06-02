@@ -7,10 +7,10 @@ plugins {
 }
 
 base {
-    archivesName = 'Sus_InstantSwap-1.3.0-Forge26.1'
+    archivesName = 'Sus_InstantSwap-2.0.0-Forge26.1'
 }
 
-version = '1.3.0'
+version = '2.0.0'
 group = 'com.susinstantswap'
 
 // Mojang ships Java 25 for 26.1+
@@ -45,6 +45,7 @@ repositories {
 dependencies {
     implementation minecraft.dependency('net.minecraftforge:forge:26.1-62.0.9')
     annotationProcessor 'net.minecraftforge:eventbus-validator:7.0.1'
+    annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -52,10 +53,10 @@ tasks.named('processResources', ProcessResources).configure {
             minecraft_version: '26.1',
             forge_version: '62.0.9',
             mod_id: 'susinstantswap',
-            mod_version: '1.3.0',
+            mod_version: '2.0.0',
     ]
     inputs.properties replaceProperties
-    filesMatching(['META-INF/mods.toml']) {
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
         expand replaceProperties
     }
 }
@@ -65,9 +66,10 @@ tasks.named('jar', Jar).configure {
     manifest {
         attributes([
                 'Specification-Title'     : 'susinstantswap',
-                'Specification-Version'   : '1.3.0',
+                'Specification-Version'   : '2.0.0',
                 'Implementation-Title'    : "Su's Instant Swap",
-                'Implementation-Version'  : '1.3.0',
+                'Implementation-Version'  : '2.0.0',
+                'MixinConfigs': 'susinstantswap.mixins.json'
         ])
     }
 }

@@ -9,7 +9,11 @@ version="${mod_version}"
 displayName="Su's Instant Swap"
 logoFile="assets/susinstantswap/icon.png"
 authors="Su_Crispy"
-description="Hold a key to open your inventory; release over a slot to instantly swap it with your hotbar selection. Supports long/short press dual modes, GUI swap, survival/creative/adventure game modes."
+description="Hold the inventory key to swap items with your hotbar. Coexists with vanilla — short press toggles inventory, long press swaps."
+clientSideOnly=true
+
+[[mixins]]
+config="susinstantswap.mixins.json"
 
 [[dependencies.susinstantswap]]
     modId="forge"
