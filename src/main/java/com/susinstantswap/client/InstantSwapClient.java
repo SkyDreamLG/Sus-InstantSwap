@@ -45,15 +45,13 @@ public class InstantSwapClient {
     private static SwapState state = SwapState.IDLE;
 
     private static boolean configLogged = false;
-    private static boolean suppressNextTooltip;
-    private static int suppressTooltipFrames;
 
-    /** Called from TooltipMixin to check if tooltip should be suppressed. */
-    public static boolean shouldSuppressTooltip() {
-        if (!suppressNextTooltip) return false;
-        suppressNextTooltip = false;
-        suppressTooltipFrames = 0;
-        return true;
+    // ── Tooltip suppression: tick-count window. 3 ticks covers the reposition + 2 renders. ──
+    private static int suppressTooltipTicks;
+
+    /** Called from TooltipMixin. Returns true during suppression window. */
+    public static boolean isTooltipSuppressed() {
+        return suppressTooltipTicks > 0;
     }
 
     // Belt-and-suspenders: sync config once on first tick
@@ -105,8 +103,7 @@ public class InstantSwapClient {
     public static void onClientTick(TickEvent.ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
 
-        if (suppressTooltipFrames > 0 && --suppressTooltipFrames == 0)
-            suppressNextTooltip = false;
+        if (suppressTooltipTicks > 0) suppressTooltipTicks--;
 
         // Belt-and-suspenders: sync config on first tick
         if (!firstTickSyncDone) {
@@ -476,8 +473,7 @@ public class InstantSwapClient {
         GLFW.glfwSetCursorPos(h,
                 (int) ((s.getGuiLeft() + s.getXSize()) * gs) - 5,
                 (int) ((s.getGuiTop() + s.getYSize()) * gs) - 5);
-        suppressNextTooltip = true;
-        suppressTooltipFrames = 2;
+        suppressTooltipTicks = 3;
     }
 
     private static void playSwapSound(Minecraft mc) {
