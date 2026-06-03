@@ -13,16 +13,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * Intercepts AbstractContainerScreen.keyPressed() for the inventory key.
  *
- * <p>In NF, {@code screen.keyPressed()} fires BEFORE {@code KeyMapping.click()},
- * so {@code inventoryKeyHeld} is still false at Mixin time — fresh presses
- * fall through to vanilla close.</p>
+ * <p>When a container screen is already open and the user presses E,
+ * {@code handleKeyInput} does NOT set {@code inventoryKeyHeld} (since it
+ * detects the open screen and delegates to this Mixin). This Mixin then:</p>
+ * <ol>
+ *   <li>Tries GUI swap (unbound E key fallback) — if a valid target exists,
+ *       performs the swap and consumes the event.</li>
+ *   <li>If no valid swap target, closes the screen via
+ *       {@code mc.player.closeContainer()} which sends the proper
+ *       {@code ServerboundContainerClosePacket} to the server.</li>
+ * </ol>
  *
- * <p>In Fabric, {@code KeyboardMixin.handleKeyInput} fires at HEAD before
- * {@code screen.keyPressed()}, so {@code inventoryKeyHeld} is already true.
- * However, REPEAT events are blocked by {@code handleKeyInput} (returns true,
- * cancels the whole {@code KeyboardHandler.keyPress()}), so this Mixin only
- * sees FRESH presses. That means we can close immediately when no swap
- * target exists — no deferred-close mechanism needed.</p>
+ * <p>REPEAT events are blocked upstream by {@code handleKeyInput} and
+ * never reach this Mixin.</p>
  */
 @Mixin(AbstractContainerScreen.class)
 public class ScreenKeyMixin {
