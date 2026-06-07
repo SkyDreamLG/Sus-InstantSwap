@@ -7,11 +7,17 @@
 ## [2.1.0] - 2026-06-07
 
 ### 新增
+- 背包模组按键自动识别与拦截（SophisticatedBackpacks、Traveler's Backpack），无需手动配置即可共存
+- 运行时按键改键检测（checkForKeyRebind），自动刷新拦截目标键
+- 游戏内浮窗提示系统（SwapToast），含冷却机制与多语言支持
+- 独立的日志类（SwapLog），统一模组日志输出
+- CI 自动构建与发布工作流
 
 ### 重构
 - TooltipMixin 重命名为 TooltipSuppressMixin，语义更清晰
 - InstantSwapClient 代码清理与整理
 - ScreenKeyMixin 代码清理
+- 日志系统重构，从分散的 LOGGER 调用迁移到 SwapLog
 
 ## [2.0.0] - 2025-12-27
 

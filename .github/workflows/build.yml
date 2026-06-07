@@ -3,7 +3,9 @@ name: CI - Build & Auto Release
 on:
   push:
     branches:
-      - '**'        # 监听所有分支的推送
+      - '**'          # 监听所有分支的推送
+      - '!main'       # 主分支无实际代码，排除
+      - '!master'
     # 不监听 tags，避免循环触发
   workflow_dispatch:   # 允许手动触发
 
@@ -17,12 +19,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 设置 JDK 21（与 .java-version 一致）
-      - name: Set up JDK 21
+      # 设置 JDK（从 .java-version 文件读取版本号，方便多分支不同版本）
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version-file: '.java-version'
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -81,7 +83,9 @@ jobs:
           # forge-26.1       → Forge 26.1
           # fabric-1.21      → Fabric 1.21
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          PLATFORM=$(echo "$BRANCH_NAME" | sed -E 's/(^|[-_])([a-z])/\1\u\2/g' | tr '-_' '  ')
+          # sed: 将分支名中的分隔符转换为单词边界; tr: 将 '-' 和 '_' 替换为空格
+          # 注意 tr 字符集中 '-' 必须放在末尾,避免被解析为命令行选项
+          PLATFORM=$(echo "$BRANCH_NAME" | sed -E 's/(^|[-_])([a-z])/\1\u\2/g' | tr '_-' '  ')
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
           echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
