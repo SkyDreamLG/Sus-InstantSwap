@@ -1,0 +1,143 @@
+name: CI - Build & Auto Release
+
+on:
+  push:
+    branches:
+      - '**'        # 监听所有分支的推送
+    # 不监听 tags，避免循环触发
+  workflow_dispatch:   # 允许手动触发
+
+jobs:
+  #######################################################################
+  # 构建作业：在任何分支上运行，产出 JAR 文件
+  #######################################################################
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 设置 JDK：优先使用 .java-version 文件，否则默认 17
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version-file: '.java-version'   # 你的各分支可以放这个文件指定 JDK 版本
+          # 如果 .java-version 不存在，setup-java 会自动失败，可改用 java-version: '17' 并注释掉上面一行
+          # java-version: '17'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Upload built JARs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-jars
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+  #######################################################################
+  # 自动发布作业：仅在非 main/master 分支上运行，利用构建产物创建 Release
+  #######################################################################
+  auto-release:
+    needs: build
+    runs-on: ubuntu-latest
+    # 条件：排除主分支，其他所有分支都尝试自动发布
+    # 如果你只想匹配特定模式的分支，请修改这个条件
+    if: |
+      github.ref_name != 'main' && github.ref_name != 'master'
+    permissions:
+      contents: write          # 用于创建 tag 和 release
+
+    steps:
+      - name: Checkout code (full history for changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # 获取完整历史，以便读取 CHANGELOG
+
+      - name: Download built JARs
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-jars
+          path: build/libs/
+
+      # 步骤 1：从任意一个 JAR 文件名中提取版本号
+      - name: Extract version from jar filename
+        id: version
+        run: |
+          JAR_FILE=$(ls build/libs/*.jar | head -n 1)
+          echo "Found jar: $JAR_FILE"
+          BASENAME=$(basename "$JAR_FILE" .jar)
+          # 匹配文件名中第一个数字版本（mod 版本），而非末尾的 MC 版本
+          VERSION=$(echo "$BASENAME" | grep -oP '\d+\.\d+(\.\d+)?' | head -1 || true)
+          if [ -z "$VERSION" ]; then
+            echo "::error::无法从文件名提取版本号: $BASENAME"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # 步骤 2：基于分支名构造唯一的 tag（避免不同分支版本号冲突）
+      - name: Build unique tag with branch name
+        id: tag
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          # 将分支中的 '/' 替换为 '-'，避免 tag 非法字符
+          SAFE_BRANCH=$(echo "$BRANCH_NAME" | tr '/' '-')
+          UNIQUE_TAG="v${{ steps.version.outputs.version }}-$SAFE_BRANCH"
+          echo "tag=$UNIQUE_TAG" >> $GITHUB_OUTPUT
+          echo "unique_tag=$UNIQUE_TAG" >> $GITHUB_OUTPUT
+
+      # 步骤 3：检查 tag 是否已经存在
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "${{ steps.tag.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.tag.outputs.tag }} already exists, skipping release."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # 步骤 4：生成 Release Notes（从 CHANGELOG.md 提取当前版本章节）
+      - name: Generate Release Notes
+        id: release_notes
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          NOTES=""
+          if [ -f "CHANGELOG.md" ]; then
+            # 提取从 "## [版本号]" 或 "## 版本号" 开始，到下一个 "## " 之前的内容
+            # 并去掉标题行本身（可选）
+            NOTES=$(sed -n "/^## \[\{0,1\}$VERSION\]\{0,1\}/,/^## /p" CHANGELOG.md | sed '1d;$d' || true)
+          fi
+          # 如果没提取到或没有 CHANGELOG.md，使用默认消息
+          if [ -z "$NOTES" ]; then
+            NOTES="Auto-release for version $VERSION (${{ github.ref_name }})."
+          fi
+          # 多行输出到 GITHUB_OUTPUT
+          delimiter="EOF_RELEASE_BODY"
+          echo "body<<$delimiter" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "$delimiter" >> $GITHUB_OUTPUT
+
+      # 步骤 5：创建 Git 标签并发布 Release
+      - name: Create Tag and Release
+        if: steps.check_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          # 创建轻量标签（如果需要附注标签，可改用 git tag -a）
+          git tag "$TAG"
+          git push origin "$TAG"
+          # 创建 GitHub Release，上传所有 JAR 文件
+          gh release create "$TAG" \
+            --title "$VERSION (${{ github.ref_name }})" \
+            --notes "${{ steps.release_notes.outputs.body }}" \
+            --draft=false \
+            --prerelease=false \
+            build/libs/*.jar
