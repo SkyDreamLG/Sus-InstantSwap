@@ -1,6 +1,7 @@
 package com.susinstantswap.mixin;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.susinstantswap.SwapLog;
 import com.susinstantswap.client.InstantSwapClient;
 import com.susinstantswap.client.SwapKeyState;
 import net.minecraft.client.Minecraft;
@@ -31,21 +32,25 @@ public class ScreenKeyMixin {
     private void onKeyPressed(int keyCode, int scanCode, int modifiers,
                               CallbackInfoReturnable<Boolean> cir) {
         if (!SwapKeyState.modEnabled) return;
-        Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.options == null) return;
+        if (Minecraft.getInstance().options == null) return;
 
         InputConstants.Key pressed = InputConstants.getKey(keyCode, scanCode);
-        if (!pressed.equals(mc.options.keyInventory.getKey())) return;
+        if (!SwapKeyState.isTargetKey(pressed)) return;
 
         if (SwapKeyState.inventoryKeyHeld) {
             // REPEAT — block close to prevent flicker during long press
+            SwapLog.debug("ScreenKeyMixin: repeat key blocked (inventoryKeyHeld=true, key={})", pressed.getName());
             cir.setReturnValue(false);
             return;
         }
 
         // Fresh press — try GUI swap, otherwise let vanilla handle
+        SwapLog.debug("ScreenKeyMixin: fresh press, trying GUI swap...");
         if (InstantSwapClient.tryPerformGuiSwap((AbstractContainerScreen<?>) (Object) this)) {
+            SwapLog.debug("ScreenKeyMixin: GUI swap succeeded, intercepting event");
             cir.setReturnValue(true);
+        } else {
+            SwapLog.debug("ScreenKeyMixin: GUI swap not performed, passing to vanilla");
         }
         // If GUI swap didn't fire: don't intercept — let vanilla close the screen
     }
