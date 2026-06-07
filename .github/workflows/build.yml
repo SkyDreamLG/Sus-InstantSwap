@@ -17,14 +17,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 设置 JDK：优先使用 .java-version 文件，否则默认 17
-      - name: Set up JDK
+      # 设置 JDK 21（与 .java-version 一致）
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version-file: '.java-version'   # 你的各分支可以放这个文件指定 JDK 版本
-          # 如果 .java-version 不存在，setup-java 会自动失败，可改用 java-version: '17' 并注释掉上面一行
-          # java-version: '17'
+          java-version: '21'
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
