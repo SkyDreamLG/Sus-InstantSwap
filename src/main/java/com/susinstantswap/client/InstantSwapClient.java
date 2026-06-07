@@ -278,6 +278,9 @@ public class InstantSwapClient {
         if (hs == null || (!hs.hasItem() && !config.emptySlotSwapEnabled.get())) {
             SwapLog.debug("performSwap: no valid slot under mouse (hs={}, hasItem={})",
                     hs, hs != null && hs.hasItem());
+            if (hs != null && !hs.hasItem()) {
+                SwapToast.warn("toast.susinstantswap.empty_slot_swap_disabled");
+            }
             return false;
         }
 
@@ -286,6 +289,7 @@ public class InstantSwapClient {
         // Both slots empty → nothing to swap (unified before creative/survival split)
         if (!hs.hasItem() && mc.player.getInventory().getItem(sel).isEmpty()) {
             SwapLog.debug("performSwap: both slots empty, nothing to swap");
+            SwapToast.warn("toast.susinstantswap.both_slots_empty");
             return false;
         }
 
@@ -302,6 +306,9 @@ public class InstantSwapClient {
         // Player inventory → restrict to backpack + hotbar
         if (screen instanceof InventoryScreen && (!isPlayerInventorySlot(hs) || hs.index == hotbarMenuSlot(sel))) {
             SwapLog.debug("performSwap: inventory screen restriction (same slot or not player inv)");
+            if (!isPlayerInventorySlot(hs)) {
+                SwapToast.error("toast.susinstantswap.not_player_inventory");
+            }
             return false;
         }
 
@@ -309,6 +316,7 @@ public class InstantSwapClient {
         ItemStack hand = mc.player.getInventory().getItem(sel);
         if (!hand.isEmpty() && !hs.mayPlace(hand)) {
             SwapLog.debug("performSwap: hand item {} may not be placed in target slot", hand.getDisplayName().getString());
+            SwapToast.error("toast.susinstantswap.item_not_placeable");
             return false;
         }
 
@@ -322,6 +330,7 @@ public class InstantSwapClient {
             return true;
         }
         SwapLog.warn("performSwap: containerSwap returned false unexpectedly");
+        SwapToast.error("toast.susinstantswap.unknown_error");
         return false;
     }
 
@@ -398,6 +407,7 @@ public class InstantSwapClient {
                 EquipmentSlot actual = mc.player.getEquipmentSlotForItem(handStack);
                 if (!actual.isArmor() || actual != expected) {
                     SwapLog.debug("  armor mismatch: expected={} actual={} -> false", expected, actual);
+                    SwapToast.error("toast.susinstantswap.armor_slot_mismatch");
                     return false;
                 }
             }

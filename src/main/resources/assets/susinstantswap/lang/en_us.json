@@ -16,5 +16,12 @@
   "config.susinstantswap.emptySlotSwapEnabled": "Empty Slot Swap",
   "config.susinstantswap.emptySlotSwapEnabled.tooltip": "Also perform the swap on empty slots.",
   "config.susinstantswap.debug": "Debug Logging",
-  "config.susinstantswap.debug.tooltip": "Output debug messages to the game log."
+  "config.susinstantswap.debug.tooltip": "Output debug messages to the game log.",
+
+  "toast.susinstantswap.empty_slot_swap_disabled": "Empty slot swap is disabled, cannot swap with empty slot",
+  "toast.susinstantswap.both_slots_empty": "Both slots are empty, nothing to swap",
+  "toast.susinstantswap.not_player_inventory": "Can only swap items in backpack or hotbar",
+  "toast.susinstantswap.item_not_placeable": "The item in hand cannot be placed in this slot",
+  "toast.susinstantswap.armor_slot_mismatch": "Item type does not match the equipment slot",
+  "toast.susinstantswap.unknown_error": "An unknown error occurred, swap failed"
 }
