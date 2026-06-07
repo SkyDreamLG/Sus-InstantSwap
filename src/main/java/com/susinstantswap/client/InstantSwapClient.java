@@ -40,8 +40,9 @@ public class InstantSwapClient {
     private static SwapState state = SwapState.IDLE;
 
     private static boolean configLogged = false;
-    private static boolean suppressNextTooltip;
-    private static int suppressTooltipFrames;
+    private static int suppressTooltipTicks;
+
+    public static boolean isTooltipSuppressed() { return suppressTooltipTicks > 0; }
 
     public static void init(SwapConfig cfg) {
         config = cfg;
@@ -92,8 +93,7 @@ public class InstantSwapClient {
     public static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
 
-        if (suppressTooltipFrames > 0 && --suppressTooltipFrames == 0)
-            suppressNextTooltip = false;
+        if (suppressTooltipTicks > 0) suppressTooltipTicks--;
 
         if (!configLogged) {
             configLogged = true;
@@ -230,10 +230,6 @@ public class InstantSwapClient {
         boolean isInventoryKey = isInventoryKeyEvent(mc, event);
         boolean isGuiSwapKey = SWAP_IN_GUI_KEY.isUnbound() ? false : isGuiSwapKeyEvent(event);
 
-        // Block backpack key repeats when inventoryKeyHeld is handled in
-        // onScreenKeyPressedPre below (ScreenEvent.KeyPressed.Pre is cancellable,
-        // unlike InputEvent.Key).
-
         // EditBox protection: consume vanilla click so E doesn't close screen
         if (keyDown && isInventoryKey && mc.screen != null && hasEditBoxFocus(mc.screen)) {
             SwapLog.debug("EditBox focused, consuming inventory key to prevent screen close");
@@ -266,10 +262,8 @@ public class InstantSwapClient {
 
     @SubscribeEvent
     public static void onRenderTooltip(RenderTooltipEvent.Pre event) {
-        if (suppressNextTooltip) {
+        if (isTooltipSuppressed()) {
             event.setCanceled(true);
-            suppressNextTooltip = false;
-            suppressTooltipFrames = 0;
         }
     }
 
@@ -301,7 +295,6 @@ public class InstantSwapClient {
 
         // ── Creative inventory → special handling (must be BEFORE csi filter) ──
         if (screen instanceof CreativeModeInventoryScreen cs) {
-            if (!creative) return false;
             if (creativeSwap(mc, cs, sel)) { playSwapSound(mc); return true; }
             return false;
         }
@@ -388,9 +381,15 @@ public class InstantSwapClient {
         }
 
         // Creative equipment: csi=5-8 (armor) or 45 (offhand) — use native SWAP
+        // Only applies on the inventory/survival tab (not creative item tabs)
         int csi = hs.getContainerSlot();
-        if (csi == 45 || (csi >= 5 && csi <= 8)) {
+        if (cs.isInventoryOpen() && (csi == 45 || (csi >= 5 && csi <= 8))) {
             SwapLog.debug("  branch=CREATIVE_EQUIP csi={} sel={}", csi, sel);
+            // Slot type validation — reject items that don't fit the equipment slot
+            if (!handStack.isEmpty() && !hs.mayPlace(handStack)) {
+                SwapLog.debug("  mayPlace rejected -> false");
+                return false;
+            }
             // Armor type validation
             if (csi <= 8 && !handStack.isEmpty()) {
                 EquipmentSlot expected = csi == 5 ? EquipmentSlot.HEAD :
@@ -409,6 +408,7 @@ public class InstantSwapClient {
             return true;
         }
 
+        // SlotWrapper — hotbar slots on creative item tabs (not inventory tab)
         if (hs instanceof CreativeModeInventoryScreen.SlotWrapper w) {
             int t = w.target.index;
             SwapLog.debug("  branch=SlotWrapper t={} heldMenuIdx={}", t, heldIdx);
@@ -483,6 +483,14 @@ public class InstantSwapClient {
 
     // ── Key detection ──
 
+    /** Public entry for mixins: checks whether an InputConstants.Key matches the vanilla inventory key. */
+    public static boolean isSwapKey(InputConstants.Key key) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.options == null) return false;
+        InputConstants.Key invKey = mc.options.keyInventory.getKey();
+        return invKey.getType() == key.getType() && invKey.getValue() == key.getValue();
+    }
+
     private static boolean isInventoryKeyPhysicallyDown(Minecraft mc) {
         for (InputConstants.Key key : SwapKeyState.getTargetKeys()) {
             if (key.getType() == InputConstants.Type.KEYSYM
@@ -531,8 +539,7 @@ public class InstantSwapClient {
         int y = (int) ((s.getGuiTop() + s.getYSize()) * gs) - 5;
         SwapLog.debug("Repositioning cursor to ({}, {})", x, y);
         GLFW.glfwSetCursorPos(h, x, y);
-        suppressNextTooltip = true;
-        suppressTooltipFrames = 2;
+        suppressTooltipTicks = 3;
     }
 
     private static void playSwapSound(Minecraft mc) {
