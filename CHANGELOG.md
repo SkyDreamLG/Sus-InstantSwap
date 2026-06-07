@@ -7,14 +7,6 @@
 ## [2.1.0] - 2026-06-07
 
 ### 新增
-- 背包模组按键自动识别与拦截（SophisticatedBackpacks、Traveler's Backpack），无需手动配置即可与背包模组共存
-- 运行时按键改键检测（checkForKeyRebind），自动刷新拦截目标键
-- 游戏内浮窗提示系统（SwapToast），含冷却机制与多语言支持（信息/警告/错误）
-- 独立的日志类（SwapLog），统一模组日志输出
-- CI 自动构建与发布工作流
-
-### 修复
-- 更详细的错误提示信息，便于问题排查
 
 ### 重构
 - TooltipMixin 重命名为 TooltipSuppressMixin，语义更清晰
