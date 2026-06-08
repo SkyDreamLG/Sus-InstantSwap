@@ -9,6 +9,7 @@ public class SwapConfig {
     public final ModConfigSpec.BooleanValue mouseReposition;
     public final ModConfigSpec.BooleanValue guiSwapEnabled;
     public final ModConfigSpec.BooleanValue emptySlotSwapEnabled;
+    public final ModConfigSpec.BooleanValue rowSwapEnabled;
     public final ModConfigSpec.BooleanValue debug;
 
     public SwapConfig(ModConfigSpec.Builder builder) {
@@ -25,6 +26,8 @@ public class SwapConfig {
                 .comment("In container screens, press the GUI swap key to directly swap items and close the screen").define("guiSwapEnabled", false);
         emptySlotSwapEnabled = builder.translation("config.susinstantswap.emptySlotSwapEnabled")
                 .comment("Also swap empty slots").define("emptySlotSwapEnabled", false);
+        rowSwapEnabled = builder.translation("config.susinstantswap.rowSwapEnabled")
+                .comment("In survival inventory, show arrow icons on the left to swap entire rows with the hotbar").define("rowSwapEnabled", true);
         debug = builder.translation("config.susinstantswap.debug")
                 .comment("Debug Logging").define("debug", false);
     }

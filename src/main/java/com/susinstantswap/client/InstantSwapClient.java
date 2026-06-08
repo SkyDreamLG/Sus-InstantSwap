@@ -32,8 +32,7 @@ import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
 /**
- * Sus-InstantSwap v2.0.1 — coexists with the vanilla inventory key.
- * Mouse reposition uses reflection to set xpos/ypos directly (zero-frame).
+ * Sus-InstantSwap v2.1.0 — row-swap arrows on survival inventory.
  */
 public class InstantSwapClient {
 
@@ -92,9 +91,10 @@ public class InstantSwapClient {
 
         if (!configLogged) {
             configLogged = true;
-            LOGGER.info("[SusInstantSwap] Config: mod={} threshold={}ms sound={} guiSwap={} emptySwap={} debug={} mouse={}",
+            LOGGER.info("[SusInstantSwap] Config: mod={} threshold={}ms sound={} guiSwap={} emptySwap={} rowSwap={} debug={} mouse={}",
                     config.modEnabled.get(), config.holdThresholdMs.get(), config.soundEnabled.get(),
                     config.guiSwapEnabled.get(), config.emptySlotSwapEnabled.get(),
+                    config.rowSwapEnabled.get(),
                     config.debug.get(), config.mouseReposition.get());
         }
 
@@ -204,6 +204,16 @@ public class InstantSwapClient {
 
     private static boolean performSwap(Minecraft mc) {
         if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
+
+        // ── Row swap: hovering over a groove on any container with player inventory ──
+        if (RowArrowWidget.hoveredRow >= 0 && config.rowSwapEnabled.get()) {
+            debugLog("performSwap TRIGGERED: screen=" + screen.getClass().getSimpleName()
+                    + " hoveredRow=" + RowArrowWidget.hoveredRow
+                    + " creative=" + mc.player.isCreative());
+            if (performRowSwap(mc, screen)) return true;
+            return false;
+        }
+
         Slot hs = screen.getSlotUnderMouse();
         if (hs == null || (!hs.hasItem() && !config.emptySlotSwapEnabled.get())) return false;
 
@@ -241,16 +251,79 @@ public class InstantSwapClient {
 
     private static boolean containerSwap(AbstractContainerScreen<?> s, int slotIdx, int hotbar) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.getConnection() == null) return false;
+        if (mc.getConnection() == null) {
+            debugLog("containerSwap: connection=null → false");
+            return false;
+        }
         Int2ObjectOpenHashMap<ItemStack> cs = new Int2ObjectOpenHashMap<>();
         // Guard: never swap a hotbar slot with itself
         Slot slot = s.getMenu().getSlot(slotIdx);
         if (slot != null && slot.container == mc.player.getInventory()
-                && slot.getContainerSlot() == hotbar) return false;
+                && slot.getContainerSlot() == hotbar) {
+            debugLog("containerSwap: self-swap guard → false");
+            return false;
+        }
+        debugLog("containerSwap SEND: containerId=" + s.getMenu().containerId
+                + " stateId=" + s.getMenu().getStateId()
+                + " slotIdx=" + slotIdx + " hotbar=" + hotbar);
         mc.getConnection().send(new ServerboundContainerClickPacket(
                 s.getMenu().containerId, s.getMenu().getStateId(), slotIdx, hotbar,
                 ClickType.SWAP, ItemStack.EMPTY, cs));
         return true;
+    }
+
+    /** Swap an entire inventory row (9 slots) with the hotbar. */
+    private static boolean performRowSwap(Minecraft mc, AbstractContainerScreen<?> screen) {
+        int row = RowArrowWidget.hoveredRow;
+
+        debugLog("performRowSwap ENTER: row=" + row + " creative=" + mc.player.isCreative());
+
+        boolean anySwap = false;
+        for (int col = 0; col < 9; col++) {
+            int slotIdx = RowArrowWidget.rowSlotIndex(row, col);
+            Slot s = screen.getMenu().getSlot(slotIdx);
+            if (s == null) {
+                debugLog("  col=" + col + " slotIdx=" + slotIdx + " → NULL, skip");
+                continue;
+            }
+
+            // Safety: must be a player-inventory slot
+            if (s.container != mc.player.getInventory()) {
+                debugLog("  col=" + col + " slotIdx=" + slotIdx
+                        + " → container=" + s.container.getClass().getSimpleName() + " not playerInv, skip");
+                continue;
+            }
+            if (s.getContainerSlot() == col) {
+                debugLog("  col=" + col + " slotIdx=" + slotIdx + " → self-swap, skip");
+                continue;
+            }
+
+            if (!s.hasItem() && mc.player.getInventory().getItem(col).isEmpty()
+                    && !config.emptySlotSwapEnabled.get()) {
+                debugLog("  col=" + col + " slotIdx=" + slotIdx + " → both empty + emptySwap=off, skip");
+                continue;
+            }
+
+            debugLog("  col=" + col + " slotIdx=" + slotIdx + " cs=" + s.getContainerSlot()
+                    + " hasItem=" + s.hasItem()
+                    + " hotbarHasItem=" + !mc.player.getInventory().getItem(col).isEmpty()
+                    + " → containerSwap");
+
+            if (containerSwap(screen, slotIdx, col)) {
+                anySwap = true;
+                debugLog("  col=" + col + " → OK");
+            } else {
+                debugLog("  col=" + col + " → FAILED");
+            }
+        }
+
+        debugLog("performRowSwap EXIT: anySwap=" + anySwap);
+
+        if (anySwap) {
+            playSwapSound(mc);
+            SwapKeyState.closePendingTicks = 1;
+        }
+        return anySwap;
     }
 
     private static boolean creativeSwap(Minecraft mc, CreativeModeInventoryScreen cs, int sel) {

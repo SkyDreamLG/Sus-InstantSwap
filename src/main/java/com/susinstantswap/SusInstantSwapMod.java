@@ -24,7 +24,7 @@ public class SusInstantSwapMod {
     public static ModConfigSpec CONFIG_SPEC;
 
     public SusInstantSwapMod(IEventBus modEventBus, ModContainer modContainer) {
-        LOGGER.info("[SusInstantSwap] v2.0");
+        LOGGER.info("[SusInstantSwap] v2.1");
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
         CONFIG = new SwapConfig(b);
         CONFIG_SPEC = b.build();
