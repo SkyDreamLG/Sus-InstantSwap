@@ -14,6 +14,13 @@
 ### Fixed
 
 - Creative inventory row swap was broken by `SlotWrapper.index` returning incorrect values in NeoForge. Fixed by building a `containerSlot → menuIndex` mapping during slot detection.
+- **Container swap validation — backpack ghost item fix.** Swapping an "in-use" item (e.g. a backpack held in mainhand while its UI is open) now correctly rejects the swap, preventing a ghost item from appearing in the mainhand slot.
+  - Added bidirectional `Slot.mayPickup(Player)` checks in `performSwap()`, `containerSwap()`, and `performRowSwap()` — both the hovered slot AND the hotbar slot are now validated, matching vanilla's `AbstractContainerMenu.doClick()` behavior.
+  - Added `mayPlace()` validation for row swap hotbar items (was previously missing).
+  - New helper method `findMenuSlot()` for locating menu Slot objects by container slot index.
+- **Code cleanup:**
+  - Replaced `LOGGER.info()` with `debugLog()` in `isContainerOpener()` (was logging every slot on every swap).
+  - Removed unused `hotbarMenuSlot()` method and `slotClicked` access transformer entry.
 
 ## [2.0.0] — 2026-05-25
 

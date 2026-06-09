@@ -213,7 +213,7 @@ public class InstantSwapClient {
         if (isContainerOpener(mc.player.getInventory()
                 .getItem(mc.player.getInventory().selected),
                 mc.player.containerMenu)) {
-            LOGGER.info("[RowSwap] performSwap BLOCKED by container opener guard");
+            debugLog("performSwap BLOCKED by container opener guard");
             return false;
         }
 
@@ -250,6 +250,20 @@ public class InstantSwapClient {
         ItemStack hand = mc.player.getInventory().getItem(sel);
         if (!hand.isEmpty() && !hs.mayPlace(hand)) return false;
 
+        // Guard: can we pick up the item from the hovered slot? (vanilla checks this for SWAP)
+        if (hs.hasItem() && !hs.mayPickup(mc.player)) {
+            debugLog("performSwap BLOCKED: hovered slot mayPickup=false");
+            return false;
+        }
+
+        // Guard: can we pick up the item from the selected hotbar slot?
+        // Prevents swapping away items that are "in use" (e.g. an open backpack in mainhand)
+        Slot hotbarMenuSlot = findMenuSlot(screen, mc.player.getInventory(), sel);
+        if (hotbarMenuSlot != null && hotbarMenuSlot.hasItem() && !hotbarMenuSlot.mayPickup(mc.player)) {
+            debugLog("performSwap BLOCKED: selected hotbar slot mayPickup=false (item in use)");
+            return false;
+        }
+
         int closeDelay = isVanillaInventory(screen) ? 1 : 2;
 
         // All containers → ClickType.SWAP
@@ -273,6 +287,17 @@ public class InstantSwapClient {
         if (slot != null && slot.container == mc.player.getInventory()
                 && slot.getContainerSlot() == hotbar) {
             debugLog("containerSwap: self-swap guard → false");
+            return false;
+        }
+        // Guard: target slot must allow pickup (vanilla checks this for SWAP)
+        if (slot != null && slot.hasItem() && !slot.mayPickup(mc.player)) {
+            debugLog("containerSwap: target slot mayPickup=false → false");
+            return false;
+        }
+        // Guard: hotbar slot must allow pickup (prevents swapping "in use" items like open backpacks)
+        Slot hSlot = findMenuSlot(s, mc.player.getInventory(), hotbar);
+        if (hSlot != null && hSlot.hasItem() && !hSlot.mayPickup(mc.player)) {
+            debugLog("containerSwap: hotbar slot mayPickup=false → false");
             return false;
         }
         debugLog("containerSwap SEND: containerId=" + s.getMenu().containerId
@@ -313,6 +338,26 @@ public class InstantSwapClient {
             if (!s.hasItem() && mc.player.getInventory().getItem(col).isEmpty()
                     && !config.emptySlotSwapEnabled.get()) {
                 debugLog("  col=" + col + " slotIdx=" + slotIdx + " → both empty + emptySwap=off, skip");
+                continue;
+            }
+
+            // Guard: row slot must allow pickup (locked output slots, etc.)
+            if (s.hasItem() && !s.mayPickup(mc.player)) {
+                debugLog("  col=" + col + " → row slot mayPickup=false, skip");
+                continue;
+            }
+
+            // Guard: hotbar item must fit in the row slot
+            ItemStack hotbarItem = mc.player.getInventory().getItem(col);
+            if (!hotbarItem.isEmpty() && !s.mayPlace(hotbarItem)) {
+                debugLog("  col=" + col + " → mayPlace rejected hotbar item, skip");
+                continue;
+            }
+
+            // Guard: hotbar slot must allow pickup (prevents swapping "in use" items)
+            Slot hSlot = findMenuSlot(screen, mc.player.getInventory(), col);
+            if (hSlot != null && hSlot.hasItem() && !hSlot.mayPickup(mc.player)) {
+                debugLog("  col=" + col + " → hotbar slot mayPickup=false, skip");
                 continue;
             }
 
@@ -453,12 +498,21 @@ public class InstantSwapClient {
         return slot.container == Minecraft.getInstance().player.getInventory();
     }
 
-    private static boolean isVanillaInventory(AbstractContainerScreen<?> screen) {
-        return screen instanceof InventoryScreen || screen instanceof CreativeModeInventoryScreen;
+    /**
+     * Finds the menu slot for a specific inventory container slot.
+     * Returns null if the slot is not present in this menu.
+     */
+    private static Slot findMenuSlot(AbstractContainerScreen<?> screen, Inventory inv, int containerSlot) {
+        for (Slot slot : screen.getMenu().slots) {
+            if (slot.container == inv && slot.getContainerSlot() == containerSlot) {
+                return slot;
+            }
+        }
+        return null;
     }
 
-    private static int hotbarMenuSlot(int sel) {
-        return 36 + sel; // hotbar at menu slots 36-44 in player inventory screen
+    private static boolean isVanillaInventory(AbstractContainerScreen<?> screen) {
+        return screen instanceof InventoryScreen || screen instanceof CreativeModeInventoryScreen;
     }
 
     private static int hotbarSize(Minecraft mc) {
@@ -474,16 +528,15 @@ public class InstantSwapClient {
         if (hotbarStack.isEmpty()) return false;
         Minecraft mc = Minecraft.getInstance();
         var playerInv = mc.player.getInventory();
-        LOGGER.info("[RowSwap] isContainerOpener: hotbarItem={}", hotbarStack.getItem());
+        debugLog("isContainerOpener: hotbarItem=" + hotbarStack.getItem());
         int idx = 0;
         for (Slot slot : menu.slots) {
             if (slot.container == playerInv) { idx++; continue; }
             if (!slot.hasItem()) { idx++; continue; }
             boolean locked = !slot.mayPickup(mc.player);
             boolean sameItem = slot.getItem().getItem() == hotbarStack.getItem();
-            LOGGER.info("[RowSwap]   slot[{}] container={} item={} locked={} sameItem={}",
-                    idx, slot.container.getClass().getSimpleName(),
-                    slot.getItem().getItem(), locked, sameItem);
+            debugLog("  slot[" + idx + "] container=" + slot.container.getClass().getSimpleName()
+                    + " item=" + slot.getItem().getItem() + " locked=" + locked + " sameItem=" + sameItem);
             if (locked && sameItem) return true;
             idx++;
         }
