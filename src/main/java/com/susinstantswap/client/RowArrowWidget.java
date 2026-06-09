@@ -164,7 +164,7 @@ public class RowArrowWidget {
             g.fill(rowSlotRight[r], gy,
                    rowSlotRight[r] + GROOVE_W, gy + GROOVE_HEIGHT, color);
 
-            int lx = rowSlotLeft[r] - 4;
+            int lx = rowSlotLeft[r] - 3;
             g.fill(lx, gy, lx + GROOVE_W, gy + GROOVE_HEIGHT, color);
         }
     }
