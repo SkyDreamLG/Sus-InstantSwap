@@ -11,7 +11,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.sounds.SoundEvents;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 
 import com.mojang.logging.LogUtils;
@@ -60,7 +59,7 @@ public class RowArrowWidget {
         Map<Integer, List<Slot>> byY = new LinkedHashMap<>();
         int menuIdx = 0;
         for (Slot slot : screen.getMenu().slots) {
-            if (slot.container instanceof Inventory
+            if (slot.container == player.getInventory()
                     && slot.getContainerSlot() >= 9
                     && slot.getContainerSlot() < 36) {
                 slotToMenu.put(slot.getContainerSlot(), menuIdx);

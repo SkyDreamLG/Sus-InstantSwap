@@ -19,8 +19,6 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
@@ -207,12 +205,6 @@ public class InstantSwapClient {
     private static boolean performSwap(Minecraft mc) {
         if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
 
-        // ── Guard: prevent any swap when the selected hotbar item is the
-        //     container opener (e.g., open backpack) — would cause ghost items.
-        if (isContainerOpener(mc.player.getInventory().getItem(mc.player.getInventory().selected),
-                              mc.player.containerMenu))
-            return false;
-
         // ── Row swap: hovering over a groove on any container with player inventory ──
         if (RowArrowWidget.hoveredRow >= 0 && config.rowSwapEnabled.get()) {
             debugLog("performSwap TRIGGERED: screen=" + screen.getClass().getSimpleName()
@@ -295,9 +287,8 @@ public class InstantSwapClient {
                 continue;
             }
 
-            // Safety: must be a player-inventory slot (use instanceof
-            // for mods that wrap Inventory, e.g., Sophisticated Backpacks)
-            if (!(s.container instanceof Inventory)) {
+            // Safety: must be a player-inventory slot
+            if (s.container != mc.player.getInventory()) {
                 debugLog("  col=" + col + " slotIdx=" + slotIdx
                         + " → container=" + s.container.getClass().getSimpleName() + " not playerInv, skip");
                 continue;
@@ -330,7 +321,7 @@ public class InstantSwapClient {
 
         if (anySwap) {
             playSwapSound(mc);
-            SwapKeyState.closePendingTicks = 1;
+            SwapKeyState.closePendingTicks = isVanillaInventory(screen) ? 1 : 2;
         }
         return anySwap;
     }
@@ -460,22 +451,6 @@ public class InstantSwapClient {
 
     private static int hotbarSize(Minecraft mc) {
         return mc.player.getInventory().items.size() - 27; // 9 in vanilla
-    }
-
-    /**
-     * Returns true if the given stack is likely the item that opened the
-     * current container (e.g. an open backpack, bundle, etc.).
-     * Swapping or moving such an item would cause a ghost item / desync.
-     */
-    private static boolean isContainerOpener(ItemStack hotbarStack, AbstractContainerMenu menu) {
-        if (hotbarStack.isEmpty()) return false;
-        for (Slot slot : menu.slots) {
-            if (slot.container instanceof Inventory) continue; // skip player inventory
-            if (!slot.hasItem()) continue;
-            if (ItemStack.isSameItemSameComponents(hotbarStack, slot.getItem()))
-                return true;
-        }
-        return false;
     }
 
     private static int freeSlot(Minecraft mc) {
