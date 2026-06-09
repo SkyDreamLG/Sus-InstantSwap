@@ -295,8 +295,9 @@ public class InstantSwapClient {
                 continue;
             }
 
-            // Safety: must be a player-inventory slot
-            if (s.container != mc.player.getInventory()) {
+            // Safety: must be a player-inventory slot (use instanceof
+            // for mods that wrap Inventory, e.g., Sophisticated Backpacks)
+            if (!(s.container instanceof Inventory)) {
                 debugLog("  col=" + col + " slotIdx=" + slotIdx
                         + " → container=" + s.container.getClass().getSimpleName() + " not playerInv, skip");
                 continue;
