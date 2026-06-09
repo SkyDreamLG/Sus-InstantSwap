@@ -19,6 +19,8 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
@@ -204,6 +206,14 @@ public class InstantSwapClient {
 
     private static boolean performSwap(Minecraft mc) {
         if (!(mc.screen instanceof AbstractContainerScreen<?> screen)) return false;
+
+        // ── Guard: block all swaps when the selected hotbar item is the
+        //     container opener (open backpack, bundle, etc.).  Detected by
+        //     finding a locked non-player-inventory slot with the same item.
+        if (isContainerOpener(mc.player.getInventory()
+                .getItem(mc.player.getInventory().selected),
+                mc.player.containerMenu))
+            return false;
 
         // ── Row swap: hovering over a groove on any container with player inventory ──
         if (RowArrowWidget.hoveredRow >= 0 && config.rowSwapEnabled.get()) {
@@ -451,6 +461,24 @@ public class InstantSwapClient {
 
     private static int hotbarSize(Minecraft mc) {
         return mc.player.getInventory().items.size() - 27; // 9 in vanilla
+    }
+
+    /**
+     * Returns true if the given stack is the item that opened the current
+     * container (e.g. an open backpack).  Detection: any non-player-inventory
+     * slot with the same Item AND {@code mayPickup()==false} (locked).
+     */
+    private static boolean isContainerOpener(ItemStack hotbarStack, AbstractContainerMenu menu) {
+        if (hotbarStack.isEmpty()) return false;
+        Minecraft mc = Minecraft.getInstance();
+        for (Slot slot : menu.slots) {
+            if (slot.container instanceof Inventory) continue;
+            if (!slot.hasItem()) continue;
+            if (!slot.mayPickup(mc.player)
+                    && slot.getItem().getItem() == hotbarStack.getItem())
+                return true;
+        }
+        return false;
     }
 
     private static int freeSlot(Minecraft mc) {
