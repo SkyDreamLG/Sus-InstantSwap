@@ -212,8 +212,10 @@ public class InstantSwapClient {
         //     finding a locked non-player-inventory slot with the same item.
         if (isContainerOpener(mc.player.getInventory()
                 .getItem(mc.player.getInventory().selected),
-                mc.player.containerMenu))
+                mc.player.containerMenu)) {
+            LOGGER.info("[RowSwap] performSwap BLOCKED by container opener guard");
             return false;
+        }
 
         // ── Row swap: hovering over a groove on any container with player inventory ──
         if (RowArrowWidget.hoveredRow >= 0 && config.rowSwapEnabled.get()) {
@@ -471,12 +473,19 @@ public class InstantSwapClient {
     private static boolean isContainerOpener(ItemStack hotbarStack, AbstractContainerMenu menu) {
         if (hotbarStack.isEmpty()) return false;
         Minecraft mc = Minecraft.getInstance();
+        var playerInv = mc.player.getInventory();
+        LOGGER.info("[RowSwap] isContainerOpener: hotbarItem={}", hotbarStack.getItem());
+        int idx = 0;
         for (Slot slot : menu.slots) {
-            if (slot.container instanceof Inventory) continue;
-            if (!slot.hasItem()) continue;
-            if (!slot.mayPickup(mc.player)
-                    && slot.getItem().getItem() == hotbarStack.getItem())
-                return true;
+            if (slot.container == playerInv) { idx++; continue; }
+            if (!slot.hasItem()) { idx++; continue; }
+            boolean locked = !slot.mayPickup(mc.player);
+            boolean sameItem = slot.getItem().getItem() == hotbarStack.getItem();
+            LOGGER.info("[RowSwap]   slot[{}] container={} item={} locked={} sameItem={}",
+                    idx, slot.container.getClass().getSimpleName(),
+                    slot.getItem().getItem(), locked, sameItem);
+            if (locked && sameItem) return true;
+            idx++;
         }
         return false;
     }
