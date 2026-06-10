@@ -21,6 +21,12 @@ public final class SwapKeyState {
     public static volatile int closePendingTicks = 0;
     /** Master switch — when false, the entire mod is disabled. Synced from config. */
     public static volatile boolean modEnabled = true;
+    /**
+     * Whether the last key that triggered a screen open was a vanilla
+     * key (E / inventory key).  When false, row-swap grooves and
+     * screen-level swap interception are disabled.
+     */
+    public static volatile boolean lastTriggerKeyIsVanilla = true;
 
     /** Set of {@link InputConstants.Key} that should be intercepted (inventory + backpack mod keys). */
     private static volatile Set<InputConstants.Key> targetKeys = Collections.emptySet();
@@ -32,6 +38,13 @@ public final class SwapKeyState {
     private static final String[] BACKPACK_KEY_PATTERNS = {
             "key.sophisticatedbackpacks.open_backpack",
             "key.travelersbackpack.open_backpack",
+            "key:omnis_backpack",
+            "key.backpacked.open_backpack",
+            "key.inmis.open_backpack",
+            "key.goodbackpacks.open_backpack",
+            "key.resource_backpacks.open_backpack",
+            "key.ironbackpacks.open_backpack",
+            "key.simplybackpacks.open_backpack",
     };
 
     /**
@@ -40,6 +53,31 @@ public final class SwapKeyState {
      */
     private static final Map<String, InputConstants.Key> trackedMappingSnapshot = new HashMap<>();
     private static volatile InputConstants.Key trackedInventoryKey;
+
+    /**
+     * Call from KeyClickMixin when a target key is pressed or released.
+     * Records whether the triggering key is one of our tracked target keys
+     * (vanilla inventory key OR backpack-mod key).
+     */
+    public static void updateLastTriggerKeyIsVanilla(InputConstants.Key key) {
+        if (key == null) {
+            lastTriggerKeyIsVanilla = false;
+            return;
+        }
+        // A key is "vanilla for our purposes" if it matches ANY target key
+        // (inventory key + all tracked backpack-mod keys).
+        lastTriggerKeyIsVanilla = matchesAnyTargetKey(key);
+    }
+
+    /** Compares type and value against all target keys (inventory + backpack mods). */
+    private static boolean matchesAnyTargetKey(InputConstants.Key key) {
+        for (InputConstants.Key target : targetKeys) {
+            if (target.getType() == key.getType() && target.getValue() == key.getValue()) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     private SwapKeyState() {}
 

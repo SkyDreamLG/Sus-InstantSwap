@@ -20,6 +20,7 @@ public abstract class KeyClickMixin {
             ci.cancel();
             return;
         }
+        SwapKeyState.updateLastTriggerKeyIsVanilla(key);
         SwapKeyState.inventoryKeyHeld = true;
         SwapKeyState.pressStartNanos = System.nanoTime();
         SwapKeyState.longPressConfirmed = false;
@@ -29,6 +30,7 @@ public abstract class KeyClickMixin {
     private static void onSet(InputConstants.Key key, boolean pressed, CallbackInfo ci) {
         if (!SwapKeyState.modEnabled) return;
         if (pressed || !SwapKeyState.isTargetKey(key)) return;
+        SwapKeyState.updateLastTriggerKeyIsVanilla(key);
         SwapKeyState.inventoryKeyHeld = false;
         SwapKeyState.longPressConfirmed = false;
     }
