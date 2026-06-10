@@ -15,6 +15,8 @@
   "config.susinstantswap.guiSwapEnabled.tooltip": "在容器界面中，可通过界面内交换按键直接交换物品并关闭界面。",
   "config.susinstantswap.emptySlotSwapEnabled": "空位交换",
   "config.susinstantswap.emptySlotSwapEnabled.tooltip": "悬停空槽位时也可执行交换。",
+  "config.susinstantswap.rowSwapEnabled": "整行交换",
+  "config.susinstantswap.rowSwapEnabled.tooltip": "在背包每行左右两侧显示凹槽。悬停时按住E键，可将整行物品与快捷栏交换。所有含玩家物品栏的界面均生效。",
   "config.susinstantswap.debug": "调试日志",
   "config.susinstantswap.debug.tooltip": "输出调试信息到游戏日志。",
 

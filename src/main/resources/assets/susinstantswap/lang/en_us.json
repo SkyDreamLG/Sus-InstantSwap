@@ -15,6 +15,8 @@
   "config.susinstantswap.guiSwapEnabled.tooltip": "In container screens, press the GUI swap key to directly swap items and close the screen.",
   "config.susinstantswap.emptySlotSwapEnabled": "Empty Slot Swap",
   "config.susinstantswap.emptySlotSwapEnabled.tooltip": "Also perform the swap on empty slots.",
+  "config.susinstantswap.rowSwapEnabled": "Row Swap Arrows",
+  "config.susinstantswap.rowSwapEnabled.tooltip": "Show arrow icons next to survival inventory rows. Hover and hold E to swap the entire row with your hotbar.",
   "config.susinstantswap.debug": "Debug Logging",
   "config.susinstantswap.debug.tooltip": "Output debug messages to the game log.",
 

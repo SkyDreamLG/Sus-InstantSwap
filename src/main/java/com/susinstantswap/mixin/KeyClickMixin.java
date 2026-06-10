@@ -1,7 +1,6 @@
 package com.susinstantswap.mixin;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.susinstantswap.SwapLog;
 import com.susinstantswap.client.SwapKeyState;
 import net.minecraft.client.KeyMapping;
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,11 +17,9 @@ public abstract class KeyClickMixin {
         if (!SwapKeyState.modEnabled) return;
         if (!SwapKeyState.isTargetKey(key)) return;
         if (SwapKeyState.inventoryKeyHeld) {
-            SwapLog.debug("KeyClickMixin.onClick: repeat press blocked, key already held");
             ci.cancel();
             return;
         }
-        SwapLog.debug("KeyClickMixin.onClick: key={}, inventoryKeyHeld=true, pressStartNanos recorded", key.getName());
         SwapKeyState.inventoryKeyHeld = true;
         SwapKeyState.pressStartNanos = System.nanoTime();
         SwapKeyState.longPressConfirmed = false;
@@ -32,7 +29,6 @@ public abstract class KeyClickMixin {
     private static void onSet(InputConstants.Key key, boolean pressed, CallbackInfo ci) {
         if (!SwapKeyState.modEnabled) return;
         if (pressed || !SwapKeyState.isTargetKey(key)) return;
-        SwapLog.debug("KeyClickMixin.onSet: key={} released, inventoryKeyHeld=false", key.getName());
         SwapKeyState.inventoryKeyHeld = false;
         SwapKeyState.longPressConfirmed = false;
     }
