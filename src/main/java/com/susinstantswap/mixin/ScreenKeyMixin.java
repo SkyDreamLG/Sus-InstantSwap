@@ -43,6 +43,12 @@ public class ScreenKeyMixin {
             return;
         }
 
+        // If screen was opened by a non-vanilla key (e.g. backpack mod),
+        // let vanilla handle normally — no swap, no interception.
+        if (!SwapKeyState.lastTriggerKeyIsVanilla) {
+            return;
+        }
+
         // Fresh press — try GUI swap, otherwise let vanilla handle
         if (InstantSwapClient.tryPerformGuiSwap((AbstractContainerScreen<?>) (Object) this)) {
             cir.setReturnValue(true);
