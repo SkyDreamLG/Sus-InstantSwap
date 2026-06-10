@@ -17,6 +17,8 @@
   "config.susinstantswap.emptySlotSwapEnabled.tooltip": "Also perform the swap on empty slots.",
   "config.susinstantswap.rowSwapEnabled": "Row Swap Arrows",
   "config.susinstantswap.rowSwapEnabled.tooltip": "Show arrow icons next to survival inventory rows. Hover and hold E to swap the entire row with your hotbar.",
+  "config.susinstantswap.toastEnabled": "Toast Messages",
+  "config.susinstantswap.toastEnabled.tooltip": "Show action bar messages for warnings, errors, and info.",
   "config.susinstantswap.debug": "Debug Logging",
   "config.susinstantswap.debug.tooltip": "Output debug messages to the game log.",
 

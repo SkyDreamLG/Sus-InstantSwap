@@ -1,5 +1,6 @@
 package com.susinstantswap.client;
 
+import com.susinstantswap.config.SwapConfig;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -24,6 +25,12 @@ public final class SwapToast {
 
     /** 上次显示提示的时间戳（System.nanoTime 毫秒等效） */
     private static long lastToastTime;
+
+    private static SwapConfig config;
+
+    public static void init(SwapConfig cfg) {
+        config = cfg;
+    }
 
     private SwapToast() {}
 
@@ -55,6 +62,7 @@ public final class SwapToast {
     }
 
     private static void show(ChatFormatting color, String key, Object... args) {
+        if (config == null || !config.toastEnabled.get()) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
