@@ -284,7 +284,7 @@ public class InstantSwapClient {
         Int2ObjectOpenHashMap<ItemStack> cs = new Int2ObjectOpenHashMap<>();
         // Guard: never swap a hotbar slot with itself
         Slot slot = s.getMenu().getSlot(slotIdx);
-        if (slot != null && isPlayerInventorySlot(slot)
+        if (slot != null && slot.container == mc.player.getInventory()
                 && slot.getContainerSlot() == hotbar) {
             debugLog("containerSwap: self-swap guard → false");
             return false;
@@ -313,8 +313,7 @@ public class InstantSwapClient {
     private static boolean performRowSwap(Minecraft mc, AbstractContainerScreen<?> screen) {
         int row = RowArrowWidget.hoveredRow;
 
-        debugLog("performRowSwap ENTER: row=" + row + " creative=" + mc.player.isCreative()
-                + " rowCount=" + RowArrowWidget.rowCount);
+        debugLog("performRowSwap ENTER: row=" + row + " creative=" + mc.player.isCreative());
 
         boolean anySwap = false;
         for (int col = 0; col < 9; col++) {
@@ -326,13 +325,11 @@ public class InstantSwapClient {
             }
 
             // Safety: must be a player-inventory slot
-            if (!isPlayerInventorySlot(s)) {
+            if (s.container != mc.player.getInventory()) {
                 debugLog("  col=" + col + " slotIdx=" + slotIdx
                         + " → container=" + s.container.getClass().getSimpleName() + " not playerInv, skip");
                 continue;
             }
-            // Self-swap: row slot's containerSlot matches the hotbar column
-            // (e.g. containerSlot 0-8 = hotbar slots — should never happen for rows 9-35)
             if (s.getContainerSlot() == col) {
                 debugLog("  col=" + col + " slotIdx=" + slotIdx + " → self-swap, skip");
                 continue;
@@ -497,30 +494,18 @@ public class InstantSwapClient {
             mc.player.getInventory().items.set(idx, stack);
     }
 
-    /**
-     * Check if a slot belongs to the player's inventory.
-     * Uses both identity check (==) and instanceof as fallback
-     * for mods that wrap the player inventory.
-     */
     private static boolean isPlayerInventorySlot(Slot slot) {
-        Minecraft mc = Minecraft.getInstance();
-        Inventory playerInv = mc.player.getInventory();
-        if (slot.container == playerInv) return true;
-        if (slot.container instanceof Inventory) return true;
-        return false;
+        return slot.container == Minecraft.getInstance().player.getInventory();
     }
 
     /**
      * Finds the menu slot for a specific inventory container slot.
-     * Uses both identity check and instanceof for mod compatibility.
      * Returns null if the slot is not present in this menu.
      */
     private static Slot findMenuSlot(AbstractContainerScreen<?> screen, Inventory inv, int containerSlot) {
         for (Slot slot : screen.getMenu().slots) {
-            if (slot.getContainerSlot() == containerSlot) {
-                if (slot.container == inv || slot.container instanceof Inventory) {
-                    return slot;
-                }
+            if (slot.container == inv && slot.getContainerSlot() == containerSlot) {
+                return slot;
             }
         }
         return null;
@@ -546,7 +531,7 @@ public class InstantSwapClient {
         debugLog("isContainerOpener: hotbarItem=" + hotbarStack.getItem());
         int idx = 0;
         for (Slot slot : menu.slots) {
-            if (slot.container instanceof Inventory) { idx++; continue; }
+            if (slot.container == playerInv) { idx++; continue; }
             if (!slot.hasItem()) { idx++; continue; }
             boolean locked = !slot.mayPickup(mc.player);
             boolean sameItem = slot.getItem().getItem() == hotbarStack.getItem();
